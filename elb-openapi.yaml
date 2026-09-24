@@ -1,0 +1,289 @@
+openapi: 3.1.0
+
+info:
+  title: Elektronische Leistungsbestätigung (eLB) – REST-Schnittstelle
+  summary: Transportschnittstelle gemäß TA eLB 02.01 und TA Abrechnung eLB 02.01
+  version: '02.01'
+  description: |
+    Beschreibung der REST-Schnittstelle aus zwei Technischen Anlagen der ITSG GmbH, jeweils
+    Version 02.01, Stand 08.10.2025:
+    - **TA Elektronische Leistungsbestätigung (TA eLB)**: Teilnehmerabfrage,
+      Bestätigungsanfrage, Polling und Callback
+    - **TA Abrechnung Elektronische Leistungsbestätigung (TA Abrechnung eLB)**:
+      Abrechnungsübermittlung
+
+    Beschrieben ist ausschließlich die Transportebene. Das Feld `nutzdaten` wird als
+    verschlüsselter Binärinhalt behandelt; die darin übertragenen Daten (FHIR) sind 
+    nicht Teil dieser Spezifikation.
+
+    ## Rollen
+    - **eLB-System der Krankenkasse** (Server): stellt alle Endpunkte unter `paths` bereit; in der
+      TA eLB **Bestätigungssystem** genannt.
+    - **Abrechnungssystem** der Leistungserbringer-Seite (Client), in der TA Abrechnung eLB
+      **Leistungserbringer-Software** genannt: ruft die Endpunkte auf und stellt für die Variante
+      Callback einen eigenen Endpunkt bereit (siehe `webhooks`).
+
+    ## Basis-URL (Kapitel 4)
+    Die Basis-URL je Krankenkasse steht in der Mappingdatei „Krankenkassenverzeichnis“
+    (XML, UTF-8, Download unter https://www.itsg.de/produkte/elektronische-leistungsbestaetigung-elb/) im Element
+    `Kostentraeger_Mappingverzeichnis → Krankenkasseninformation → Endpunkt_Kommunikationsstelle`.
+    Der Eintrag wird über das IK der Krankenkasse in `Kostentraegerkennung` gefunden;
+    `Leistungsart` enthält die unterstützten Sammelgruppenschlüssel. Alle Endpunkte, auch
+    `/submit-invoice`, liegen unter dieser Basis-URL.
+
+    ## Transport (Kapitel 2)
+    - Jeder Aufruf ist ein `POST` mit `multipart/form-data`.
+    - Auch die Antwort ist `multipart/form-data` mit derselben Struktur (Tabelle 1);
+      HTTP-Clients müssen Multipart-Antworten verarbeiten können.
+    - HTTP `200`: Die Anfrage wurde verarbeitet. HTTP `>= 400`: Die Anfrage kann nicht
+      verarbeitet werden; Details zur Verarbeitung stehen in `nutzdaten`.
+    - Über die Pfade unterscheidet das empfangende System die Teilverfahren schon vor der
+      Entschlüsselung.
+
+    ## Sicherheit (Kapitel 3)
+    - TLS mit Client-Authentifizierung über das Zertifikat zum IK (Security Scheme `mTLS`).
+    - Für eine Bestätigung und die zugehörige Abrechnung ist dasselbe Zertifikat zu verwenden
+      (TA Abrechnung eLB).
+    - `nutzdaten` werden in Anfrage und Antwort zusätzlich nach Anlage 16 der Gemeinsamen
+      Grundsätze Technik (SECON) verschlüsselt.
+
+externalDocs:
+  description: ITSG – Elektronische Leistungsbestätigung (Mappingdatei „Krankenkassenverzeichnis“)
+  url: https://www.itsg.de/produkte/elektronische-leistungsbestaetigung-elb/
+
+servers:
+  - url: '{endpunktKommunikationsstelle}'
+    description: eLB-System der Krankenkasse
+    variables:
+      endpunktKommunikationsstelle:
+        default: https://elb.kasse.example.org/api
+        description: >-
+          Wert von Endpunkt_Kommunikationsstelle aus der Mappingdatei „Krankenkassenverzeichnis“
+          (Kostentraeger_Mappingverzeichnis → Krankenkasseninformation).
+
+# mTLS: Der Sender (IK in `iksender`) authentifiziert sich mit seinem im Trust Center der ITSG
+# hinterlegten Zertifikat; der Empfänger prüft das Client-Zertifikat gegen das dort hinterlegte
+# öffentliche Zertifikat des Senders. Für eine Bestätigung und die zugehörige Abrechnung
+# (/submit-invoice) ist dasselbe Zertifikat zu verwenden (Details: components.securitySchemes.mTLS).
+security:
+  - mTLS: []
+
+tags:
+  - name: Teilnehmerabfrage
+    description: Teilnahme eines Versicherten am Verfahren prüfen (TA eLB, Kapitel 5.5).
+  - name: Bestätigungsanfrage
+    description: Leistungen zur Bestätigung übermitteln (TA eLB, Kapitel 5.6).
+  - name: Polling
+    description: Ergebnisse abrufen und quittieren (TA eLB, Kapitel 5.8).
+  - name: Abrechnung
+    description: Abrechnungsdaten übermitteln (TA Abrechnung eLB, Kapitel 5).
+  - name: Callback
+    description: Endpunkt des Abrechnungssystems für Ergebnisse per Callback (TA eLB, Kapitel 5.7).
+
+paths:
+  /participation-status-query:
+    post:
+      tags: [Teilnehmerabfrage]
+      operationId: participationStatusQuery
+      summary: Teilnehmerabfrage
+      description: Ermittelt, ob ein Versicherter am Verfahren teilnimmt.
+      requestBody:
+        $ref: '#/components/requestBodies/Transportstruktur'
+      responses:
+        '200':
+          $ref: '#/components/responses/Verarbeitet'
+        '4XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+        '5XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+
+  /confirmation-request:
+    post:
+      tags: [Bestätigungsanfrage]
+      operationId: confirmationRequest
+      summary: Bestätigungsanfrage
+      description: >-
+        Übermittelt Leistungen zur Bestätigung. Das Ergebnis folgt asynchron – entweder per
+        Callback an das Abrechnungssystem (Webhook `bestaetigungsergebnis`) oder per
+        Pollingabruf (`/polling/poll`).
+      requestBody:
+        $ref: '#/components/requestBodies/Transportstruktur'
+      responses:
+        '200':
+          $ref: '#/components/responses/Verarbeitet'
+        '4XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+        '5XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+
+  /polling/poll:
+    post:
+      tags: [Polling]
+      operationId: pollingPoll
+      summary: Pollingabruf
+      description: Ruft vorliegende Ergebnisse vorausgegangener Bestätigungsanfragen ab.
+      requestBody:
+        $ref: '#/components/requestBodies/Transportstruktur'
+      responses:
+        '200':
+          $ref: '#/components/responses/Verarbeitet'
+        '4XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+        '5XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+
+  /polling/confirm:
+    post:
+      tags: [Polling]
+      operationId: pollingConfirm
+      summary: Empfangsquittung
+      description: Quittiert den Erhalt der per Pollingabruf abgerufenen Ergebnisse.
+      requestBody:
+        $ref: '#/components/requestBodies/Transportstruktur'
+      responses:
+        '200':
+          $ref: '#/components/responses/Verarbeitet'
+        '4XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+        '5XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+
+  /submit-invoice:
+    post:
+      tags: [Abrechnung]
+      operationId: submitInvoice
+      summary: Abrechnungsübermittlung
+      description: >-
+        Übermittelt Abrechnungsdaten von der Leistungserbringer-Software an das eLB-System der
+        Krankenkasse. Zu verwenden ist dasselbe Zertifikat wie für die zugehörige Bestätigung.
+      requestBody:
+        $ref: '#/components/requestBodies/Transportstruktur'
+      responses:
+        '200':
+          $ref: '#/components/responses/Verarbeitet'
+        '4XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+        '5XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+
+webhooks:
+  bestaetigungsergebnis:
+    post:
+      tags: [Callback]
+      operationId: confirmationResultCallback
+      summary: Ergebnis der Bestätigungsanfrage (Callback)
+      description: |
+        Vom **Abrechnungssystem** bereitzustellender Endpunkt. Das Bestätigungssystem sendet das
+        Ergebnis einer Bestätigungsanfrage an die vom Abrechnungssystem angegebene Callback-URL;
+        ein fester Pfad ist daher nicht definiert.
+
+        Transport und Sicherheit wie bei den übrigen Aufrufen, mit vertauschten Rollen: Das
+        Bestätigungssystem ist TLS-Client und `iksender`, das Abrechnungssystem `ikempfaenger`.
+      # Sender ist hier das Bestätigungssystem: Es authentifiziert sich mit seinem im Trust Center
+      # der ITSG hinterlegten Zertifikat; das Abrechnungssystem prüft es gegen das dort hinterlegte
+      # öffentliche Zertifikat.
+      security:
+        - mTLS: []
+      requestBody:
+        $ref: '#/components/requestBodies/Transportstruktur'
+      responses:
+        '200':
+          $ref: '#/components/responses/Verarbeitet'
+        '4XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+        '5XX':
+          $ref: '#/components/responses/NichtVerarbeitet'
+
+components:
+  securitySchemes:
+    mTLS:
+      type: mutualTLS
+      description: |
+        TLS mit Client-Authentifizierung über das Zertifikat zum IK des Senders nach den
+        Gemeinsamen Grundsätzen Technik nach § 95 SGB IV; die Festlegungen der Anlage 16 GGT
+        (SECON) sind zu beachten.
+
+        Der Sender (TLS-Client, IK in `iksender`) authentifiziert sich mit seinem im Trust Center
+        der ITSG hinterlegten Zertifikat. Das empfangende System prüft das Client-Zertifikat anhand
+        des dort hinterlegten öffentlichen Zertifikats des Senders. Beim Callback ist das
+        Bestätigungssystem der Sender.
+
+        Für eine Bestätigung und die zugehörige Abrechnung (`/submit-invoice`) ist dasselbe
+        Zertifikat zu verwenden (TA Abrechnung eLB, Kapitel 3).
+
+        Hat ein IK mehrere gültige Zertifikate im Trust Center der ITSG, wird das mit dem jüngsten
+        Ausstellungsdatum verwendet – vom sendenden wie vom empfangenden System erstmals frühestens
+        5 Tage nach Ausstellung. Das empfangende System hält alle gültigen Zertifikate mindestens
+        14 Tage nach Ausstellung des neuesten vor.
+
+  requestBodies:
+    Transportstruktur:
+      required: true
+      description: Metadaten und verschlüsselte Nutzdaten nach Tabelle 1 der TAs.
+      content:
+        multipart/form-data:
+          schema:
+            $ref: '#/components/schemas/Transportstruktur'
+          example:
+            iksender: '123456789'
+            ikempfaenger: '987654321'
+            verfahren: ELB
+            nutzdaten: '(binär, verschlüsselt)'
+
+  responses:
+    Verarbeitet:
+      description: Die Anfrage wurde verarbeitet.
+      content:
+        multipart/form-data:
+          schema:
+            $ref: '#/components/schemas/Transportstruktur'
+    NichtVerarbeitet:
+      description: >-
+        Die Anfrage kann nicht verarbeitet werden (HTTP-Status >= 400). `nutzdaten` enthält
+        Details zur Verarbeitung.
+      content:
+        multipart/form-data:
+          schema:
+            $ref: '#/components/schemas/Transportstruktur'
+
+  schemas:
+    Transportstruktur:
+      type: object
+      description: >-
+        Metadaten und Nutzdaten nach Tabelle 1 der TAs, gleich für Anfragen und Antworten.
+        `iksender` ist jeweils das sendende, `ikempfaenger` das empfangende System.
+      required: [iksender, ikempfaenger, verfahren, nutzdaten]
+      properties:
+        iksender:
+          $ref: '#/components/schemas/IK'
+          description: Institutionskennzeichen des Senders.
+        ikempfaenger:
+          $ref: '#/components/schemas/IK'
+          description: Institutionskennzeichen des Empfängers.
+        verfahren:
+          $ref: '#/components/schemas/Verfahrenskennung'
+        nutzdaten:
+          $ref: '#/components/schemas/Nutzdaten'
+
+    IK:
+      type: string
+      description: Institutionskennzeichen (9-stellig).
+      pattern: '^[0-9]{9}$'
+      examples: ['123456789']
+
+    Verfahrenskennung:
+      type: string
+      description: >-
+        Verfahrenskennung der Elektronischen Leistungsbestätigung, auch für die
+        Abrechnungsübermittlung. Laut beiden TAs noch offiziell in die
+        GGT Anlage 4 „Verfahrenskennungen“ aufzunehmen.
+      enum: [ELB]
+
+    Nutzdaten:
+      type: string
+      format: binary
+      contentMediaType: application/octet-stream
+      description: >-
+        Nach Anlage 16 der Gemeinsamen Grundsätze Technik (SECON) verschlüsselte Nutzdaten.
+        Aufbau und Inhalt sind nicht Teil dieser Spezifikation (siehe TA eLB bzw. TA Abrechnung
+        eLB, jeweils Kapitel 5).
