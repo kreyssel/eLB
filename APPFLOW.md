@@ -27,7 +27,7 @@ sequenceDiagram
     end
     BS->>BS: Bestäigungsanfrage inkl. Leistungserbringer<br>Backend Callback speichern
     deactivate BS
-    LER_BE->>LER_APP: Push "Leistung erbacht"<br>Bestätigung in KK-App notwendig<br>Übergabe ID der Bestätigungsanfrage
+    LER_BE->>LER_APP: Push "Leistung erbacht"<br>Übergabe der ID der Bestätigungsanfrage
     activate LER_APP
     deactivate LER_BE
     LER_APP->>LER_APP: Aufforderung an Versicherten die<br>Leistung via Krankenkassen App zu bestätigen
