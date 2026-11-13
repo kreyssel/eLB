@@ -2,6 +2,62 @@
 
 ## Workflow Anmeldung
 
+```mermaid
+---
+config:
+  theme: redux-color
+---
+sequenceDiagram
+    actor V as Versicherter
+    participant LER_APP as Leistungserbringer-App
+    participant LER_BE as Leistungserbringer-Backend
+    participant KK_APP as Krankenkassen-App
+    participant KK_BE as Krankenkassen-Backend
+    participant BS as Bestätigungssystem
+    autonumber
+
+    Note over V,BS: Phase 1 – Fahrtorganisation
+    activate V
+    V->>V: Genehmigungsinformation von<br>Krankenkasse erhalten
+    V->>LER_APP: App öffnen
+    deactivate V
+    LER_APP->>LER_BE: Fahrt planen
+    LER_BE->>KK_BE: Genehmigungsdaten laden
+    KK_BE-->>LER_BE: Genehmigungsdaten
+
+    Note over V,BS: Phase 2 – Teilnahmestatus abfragen
+    LER_BE->>BS: Prüfen ob eKVNR am eLB Verfahren teilnimmt<br>Übergabe Leistungserbringer-Webhook-URL<br>für Teilnahmestatusänderungen und<br>Deep Link inkl. Session-ID für die Leistungserbringer-App)
+    activate BS
+    BS->>BS: Deep Link der Leistungserbringer-App prüfen
+    break Deep Link falsch
+      rect rgba(220, 0, 0, 0.15)
+        BS-->>LER_BE: Fehlermeldung
+      end
+    end
+    BS->>BS: Leistungserbringer-Webhook-URL und<br>Deep Link für Leistungserbringer-App<br>für eKVNR speichern
+    BS-->>LER_BE: Teilnahmestatus
+    break Versicherter hat zugestimmt
+        rect rgba(0, 220, 0, 0.15)
+            LER_BE->>LER_APP: Rückmeldung Zustimmung liegt vor
+            LER_APP->>LER_APP: Weiter mit Fahrtplanung
+        end
+    end
+
+    Note over V,BS: Phase 3 – Zustimmung in Krankenkassen-App
+    LER_BE-->>LER_APP: Rückmeldung Zustimmung liegt nicht vor<br>inkl. Übergabe Session-ID
+    LER_APP->>KK_APP: Krankenkasse-App per Deep Link aufrufen
+    V->>KK_APP: Anmeldung (falls nötig)
+    V->>KK_APP: Versicherter bestätigt Teilnahme am eLB Verfahren
+    KK_APP->>BS: Teilnahmebestätigung übermitteln
+    BS-->>KK_APP: Rückmeldung des Deep Link für Leistungserbringer-App    
+    BS->>LER_BE: Leistungserbringer-Webhook-URL inkl. Teilnahmestatus aufrufen
+    LER_BE->>LER_BE: Teilnahmestatus speichern
+
+    Note over V,BS: Phase 4 – Rückwechsel zu Leistungserbringer-App
+    KK_APP->>LER_APP: Aufruf des Deep Link inkl. Session-ID der Leistungserbringer-App
+    LER_APP->>LER_BE: Teilnahmestatus prüfen
+```
+
 ## Workflow Bestätigung
 
 ```mermaid
