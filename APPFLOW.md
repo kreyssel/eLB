@@ -5,6 +5,10 @@
 ## Workflow Bestätigung
 
 ```mermaid
+---
+config:
+  theme: redux-color
+---
 sequenceDiagram
     autonumber
     participant LER_APP as Leistungserbringer Kundenapp
@@ -13,15 +17,19 @@ sequenceDiagram
     participant BS as Bestätigungssystem
 
     activate LER_BE
-    LER_BE->>LER_BE: Fahrt beendet
-    LER_BE->>LER_BE: neue Bestätigungsanfrage<br>für Fahrt inkl. ID erzeugen
-    LER_BE->>BS: Bestätigunganfrage<br>inkl. Callbacks für Leistungserbringer Backend<br>als auch Callback für Krankenkassen App
+    LER_BE->>LER_BE: Leistung erbracht
+    LER_BE->>LER_BE: neue Bestätigungsanfrage<br>für Leistung inkl. ID erzeugen
+    LER_BE->>BS: Übermittlung der Bestätigunganfrage inkl. ID<br>sowie Callbacks für Leistungserbringer Backend<br>als auch Krankenkassen App
     activate BS
-    LER_BE->>LER_APP: Push "Fahrt beendet"<br>Bestätigung in KK-App notwendig<br>Übergabe ID der Bestätigungsanfrage
-    activate LER_APP
-    deactivate LER_BE
+    alt Ungültige Krankenkassen Callback?
+        BS->>BS: Validiert Krankenkassen App Callbacks
+        BS->>LER_BE: Fehlermeldung
+    end
     BS->>BS: Bestäigungsanfrage inkl. Leistungserbringer<br>Backend Callback speichern
     deactivate BS
+    LER_BE->>LER_APP: Push "Leistung erbacht"<br>Bestätigung in KK-App notwendig<br>Übergabe ID der Bestätigungsanfrage
+    activate LER_APP
+    deactivate LER_BE
     LER_APP->>LER_APP: Aufforderung an Versicherten die<br>Leistung via Krankenkassen App zu bestätigen
     LER_APP->>KK_APP: Krankenkassen App mit ID der Bestätigungsanfrage aufrufen
     activate KK_APP
@@ -41,5 +49,4 @@ sequenceDiagram
     deactivate LER_BE
     LER_APP->>LER_APP: Anzeige des Bestätigungsstatus<br>und Follow-up Flow
     deactivate LER_APP
-
 ```
