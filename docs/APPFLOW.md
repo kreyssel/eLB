@@ -115,7 +115,7 @@ Ist die Krankenkassen-FdV auf dem Gerät nicht installiert, öffnet das Betriebs
 8. **Übermittlung der eKVNR im Webhook (22)**
 Zur Zuordnung würde das Pseudonym genügen, da das Leistungserbringer-Backend die Zuordnung zur eKVNR in Schritt 4 gespeichert hat. Das entspräche besser der Datenminimierung. Der Punkt entfällt, falls die eKVNR bewusst übertragen wird.
 
-## Workflow Bestätigung
+## Workflow Bestätigung "Happy Path"
 
 ```mermaid
 ---
@@ -124,21 +124,26 @@ config:
 ---
 sequenceDiagram
     actor V as Versicherter
-    participant LER_APP as Leistungserbringer-App
+    participant LER_APP as Leistungserbringer-FdV
     participant LER_BE as Leistungserbringer-Backend
-    participant KK_APP as Krankenkassen-App
+    participant KK_APP as Krankenkassen-FdV
     participant BS as Bestätigungssystem
     autonumber
-
 
     Note over V,BS: Phase 1 – Bestätigungsanfrage anlegen
     activate LER_BE
     LER_BE->>LER_BE: Leistung als erbracht markieren
-    LER_BE->>LER_BE: Bestätigungsanfrage inkl. ID erzeugen
-    LER_BE->>BS: Bestätigungsanfrage anlegen<br>(Anfrage-ID, Leistungsdaten, KVNR,<br>Leistungserbringer-Webhook-URL und<br>Deep Link inkl. Anfrage-ID für die Leistungserbringer-App)
+    LER_BE->>LER_BE: Bestätigungsanfrage inkl. Anfrage-ID erzeugen
+    LER_BE->>BS: Bestätigungsanfrage anlegen<br>(Anfrage-ID, Leistungsdaten, eKVNR, Webhook-URL und<br>Callback-Deep-Link für Leistungserbringer-FdV)
     activate BS
-    BS->>BS: Deep Link der Leistungserbringer-App prüfen
-    break Deep Link falsch
+    BS->>BS: Webhook-URL und Callback-Deep-Link<br>gegen Registry prüfen
+    break Webhook-URL oder Callback-Deep-Link-Domain nicht in Registry
+      rect rgba(220, 0, 0, 0.15)
+        BS-->>LER_BE: Fehlermeldung
+      end
+    end
+    BS->>BS: Teilnahmestatus für eKVNR prüfen
+    break Versicherter nimmt nicht am eLB-Verfahren teil
       rect rgba(220, 0, 0, 0.15)
         BS-->>LER_BE: Fehlermeldung
       end
@@ -151,36 +156,60 @@ sequenceDiagram
     LER_BE-)LER_APP: Push inkl. Anfrage-ID
     deactivate LER_BE
     activate LER_APP
-    LER_APP->>V: Aufforderung, die Leistungs in der<br>Krankenkassen-App zu bestätigen
-    V->>LER_APP: Tippt auf „Jetzt zur Krankenkassen-App wechseln“
-    LER_APP-)KK_APP: Krankenkassen-App per Deep Link öffnen<br>(im Link ist Anfrage-ID enthalten)
+    LER_APP->>V: Aufforderung, die Leistung in der<br>Krankenkassen-FdV zu bestätigen
+    activate V
+    V->>LER_APP: Tippt auf „Jetzt zur Krankenkassen-FdV wechseln“
+    deactivate V
+    LER_APP-)KK_APP: Krankenkassen-FdV per Deep Link<br>inkl. Anfrage-ID öffnen
     deactivate LER_APP
     activate KK_APP
 
-    Note over V,BS: Phase 3 – Bestätigung in der Krankenkassen-App
-    V->>KK_APP: Anmeldung (falls nötig)
-    KK_APP->>BS: Anfrage per ID laden
+    Note over V,BS: Phase 3 – Bestätigung in der Krankenkassen-FdV
+    opt Versicherter nicht angemeldet
+        activate V
+        V->>KK_APP: Anmeldung
+        deactivate V
+    end
+    KK_APP->>BS: Anfrage per Anfrage-ID + eKVNR laden
     activate BS
-    BS-->>KK_APP: Anfragedaten inkl. Deep Link<br>für die Leistungserbringer-App
+    BS->>BS: eKVNR mit Anfrage abgleichen
+    break Anfrage unbekannt oder eKVNR passt nicht zur Anfrage
+      rect rgba(220, 0, 0, 0.15)
+        BS-->>KK_APP: Fehlermeldung
+        KK_APP->>V: Hinweis: Anfrage kann nicht angezeigt werden
+      end
+    end
+    BS-->>KK_APP: Anfragedaten inkl. Callback-Deep-Link<br>für die Leistungserbringer-FdV
     deactivate BS
     KK_APP->>V: Leistungsdaten anzeigen
-    V->>KK_APP: Bestätigt die Leistung
-    KK_APP->>BS: Bestätigungsstatus übermitteln
+    activate V
+    V->>KK_APP: Bestätigt die Leistung oder lehnt sie ab
+    deactivate V
+    KK_APP->>BS: Bestätigungsstatus (bestätigt/abgelehnt) übermitteln
     activate BS
-    BS->>BS: Status speichern
+    BS->>BS: Bestätigungsobjekt erzeugen und speichern
     BS-->>KK_APP: OK
 
-    Note over V,BS: Phase 4 – Status zurückmelden (Webhook und Rücksprung laufen parallel)
-    BS-)LER_BE: Webhook-URL mit Bestätigungsobjekt aufrufen
-    deactivate BS
-    activate LER_BE
-    LER_BE->>LER_BE: Bestätigungsobjekt speichern
-    deactivate LER_BE
-    KK_APP-)LER_APP: Deep Link für die Leistungserbringer-App aufrufen
-    deactivate KK_APP
-    activate LER_APP
+    Note over V,BS: Phase 4 – Status zurückmelden
+    par Benachrichtigung Leistungserbringer
+        BS-)LER_BE: Webhook-URL mit Bestätigungsobjekt aufrufen
+        deactivate BS
+        activate LER_BE
+        LER_BE->>LER_BE: Bestätigungsobjekt speichern
+        deactivate LER_BE
+    and Rücksprung in Leistungserbringer-FdV
+        KK_APP-)LER_APP: Callback-Deep-Link für die<br>Leistungserbringer-FdV aufrufen
+        deactivate KK_APP
+        activate LER_APP
+    end
     LER_APP->>LER_BE: Status per Anfrage-ID abfragen
     activate LER_BE
+    opt Webhook noch nicht eingegangen
+        LER_BE->>BS: Bestätigungsobjekt per Anfrage-ID abfragen
+        activate BS
+        BS-->>LER_BE: Bestätigungsobjekt
+        deactivate BS
+    end
     LER_BE-->>LER_APP: Status rückmelden
     deactivate LER_BE
     LER_APP->>V: Bestätigungsstatus anzeigen,<br>Follow-up-Flow starten
