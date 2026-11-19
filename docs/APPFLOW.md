@@ -9,53 +9,58 @@ config:
 ---
 sequenceDiagram
     actor V as Versicherter
-    participant LER_APP as Leistungserbringer-App
+    participant LER_APP as Leistungserbringer-FdV
     participant LER_BE as Leistungserbringer-Backend
-    participant KK_APP as Krankenkassen-App
-    participant KK_BE as Krankenkassen-Backend
+    participant KK_APP as Krankenkassen-FdV
     participant BS as Bestätigungssystem
     autonumber
 
     Note over V,BS: Phase 1 – Fahrtorganisation
     activate V
     V->>V: Genehmigungsinformation von<br>Krankenkasse erhalten
-    V->>LER_APP: App öffnen
+    V->>LER_APP: FdV öffnen
     deactivate V
     LER_APP->>LER_BE: Fahrt planen
-    LER_BE->>KK_BE: Genehmigungsdaten laden
-    KK_BE-->>LER_BE: Genehmigungsdaten
-
+    activate LER_APP
     Note over V,BS: Phase 2 – Teilnahmestatus abfragen
-    LER_BE->>BS: Prüfen ob eKVNR am eLB Verfahren teilnimmt<br>Übergabe Leistungserbringer-Webhook-URL<br>für Teilnahmestatusänderungen und<br>Deep Link inkl. Session-ID für die Leistungserbringer-App)
+    LER_BE->>LER_BE: Pseudonym (UUID) für eKVNR erstellen und speichern<br>sowie Callback-Deep-Link (Universal Link/App Link)<br>für Rücksprung in Leistungserbringer-FdV erzeugen
+    LER_BE->>BS: Prüfen ob eKVNR am eLB Verfahren teilnimmt -<br>Übergabe eKVNR, Pseudonym, Webhook-URL, Callback-Deep-Link
     activate BS
-    BS->>BS: Deep Link der Leistungserbringer-App prüfen
-    break Deep Link falsch
+    BS->>BS: Callback-Deep-Link<br>gegen Registry prüfen
+    break Callback-Deep-Link-Schema nicht in Registry
       rect rgba(220, 0, 0, 0.15)
         BS-->>LER_BE: Fehlermeldung
       end
     end
-    BS->>BS: Leistungserbringer-Webhook-URL und<br>Deep Link für Leistungserbringer-App<br>für eKVNR speichern
+    BS->>BS: Webhook-URL und<br>Callback-Deep-Link zusammen<br>mit eKVNR + Pseudonym speichern
     BS-->>LER_BE: Teilnahmestatus
     break Versicherter hat zugestimmt
         rect rgba(0, 220, 0, 0.15)
-            LER_BE->>LER_APP: Rückmeldung Zustimmung liegt vor
+            LER_BE-->>LER_APP: Rückmeldung Zustimmung liegt vor
             LER_APP->>LER_APP: Weiter mit Fahrtplanung
         end
     end
 
-    Note over V,BS: Phase 3 – Zustimmung in Krankenkassen-App
-    LER_BE-->>LER_APP: Rückmeldung Zustimmung liegt nicht vor<br>inkl. Übergabe Session-ID
-    LER_APP->>KK_APP: Krankenkasse-App per Deep Link aufrufen
-    V->>KK_APP: Anmeldung (falls nötig)
+    Note over V,BS: Phase 3 – Zustimmung in Krankenkassen-FdV einholen
+    LER_BE-->>LER_APP: Rückmeldung "Zustimmung liegt nicht vor"<br>inkl. Übergabe Pseudonym + Callback-Deep-Link
+    LER_APP->>LER_APP: Hinweise auf aktuell fehlende Zustimmung für eLB Verfahren,<br>und notwendige Zustimmung in Krankenkassen-FdV sowie<br>Hinweis auf bevorstehenden Wechsel in Krankenkassen-FdV
+    LER_APP->>KK_APP: Krankenkassen-FdV per "eLB consent"-Deep-Link inkl.<br>Pseudonym aufrufen und in den Vordergrund bringen
+    V-->>KK_APP: Versicherter nimmt Wechsel in Krankenkassen-FdV wahr
+    V-->>KK_APP: Anmeldung (falls nötig)
     V->>KK_APP: Versicherter bestätigt Teilnahme am eLB Verfahren
-    KK_APP->>BS: Teilnahmebestätigung übermitteln
-    BS-->>KK_APP: Rückmeldung des Deep Link für Leistungserbringer-App    
-    BS->>LER_BE: Leistungserbringer-Webhook-URL inkl. Teilnahmestatus aufrufen
+    KK_APP->>BS: Teilnahmebestätigung inkl. eKVNR + Pseudonym übermitteln
+    BS->>BS: Teilnahmestatus speichern
+    BS->>BS: Suche per eKVNR + Pseudonym ob ein<br>Callback-Deep-Link gespeichert wurde
+    BS-->>KK_APP: Sofern Pseudonym gefunden, Rückmeldung des<br>Callback-Deep-Link für Leistungserbringer-FdV    
+    BS->>LER_BE: Leistungserbringer-Webhook-URL inkl. eKVNR und Teilnahmestatus aufrufen
     LER_BE->>LER_BE: Teilnahmestatus speichern
 
-    Note over V,BS: Phase 4 – Rückwechsel zu Leistungserbringer-App
-    KK_APP->>LER_APP: Aufruf des Deep Link inkl. Session-ID der Leistungserbringer-App
+    Note over V,BS: Phase 4 – Rückwechsel zu Leistungserbringer-FdV
+    KK_APP->>LER_APP: Leistungserbringer-FdV mittels Callback-Deep-Link in den Vordergrund bringen
+    V-->>LER_APP: Versicherter nimmt Wechsel in Leistungserbinger-FdV wahr
     LER_APP->>LER_BE: Teilnahmestatus prüfen
+    LER_BE-->>LER_APP: Teilnahmestatus
+    LER_APP->>LER_APP: Weiter mit Fahrtplanung
 ```
 
 ## Workflow Bestätigung
