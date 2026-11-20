@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>eLB App-Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE work: technischer Walkthrough für Spezifikationsautor:innen
+   IDEA ein Protokoll-Mitschnitt neben einem echten Telefon, gesetzt wie ein Metro-Fahrplan
+   PICTURE das Gerät, das den Ablauf spielt, flankiert vom Spurenfahrplan und dem Nutzdaten-Inspektor
+   COLOUR weiß/ink; blau = Leistungserbringer, grün = Krankenkasse, amber = Spezifikationslücke, rot = Fehlerpfad
+   TYPE Figtree 800 + Figtree, JetBrains Mono für Nutzdaten
+   LAYOUT Laptop: Fahrplan | Gerät | Inspektor; 760–1199: Gerät | Inspektor, Fahrplan darunter; Telefon: gestapelt */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0e1116);--ink:light-dark(#111418,#e9ecf1);--mute:light-dark(#5b6472,#9aa4b2);--line:light-dark(#e3e6eb,#272e38);--panel:light-dark(#f4f5f7,#161b22);--code:light-dark(#f5f6f8,#12171e);--blue:light-dark(#0a5cff,#5c95ff);--blue2:light-dark(#0839a3,#a3c0ff);--green:light-dark(#00a05a,#2fcf86);--green2:light-dark(#00693b,#8fe6bb);--amber:#ffb400;--amberbg:light-dark(#fff1c7,#3a2d06);--red:light-dark(#e6261f,#ff6a63)}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 Figtree,system-ui,sans-serif;overflow-x:clip}
+a{color:var(--blue)}
+button{font:inherit;color:inherit}
+button:focus-visible,[role=button]:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.band{padding-block:clamp(20px,3vw,40px);padding-left:max(3vw,16px);padding-right:max(3vw,16px)}
+.wrap{max-width:1480px;margin:0 auto}
+.hd{padding-bottom:12px}
+.hrow{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;justify-content:space-between}
+h1{font-weight:800;font-size:clamp(32px,4vw,44px);line-height:1.05;letter-spacing:-.02em;margin:0}
+.sub{margin:8px 0 0;max-width:68ch;color:var(--mute)}
+.tabs{display:flex;border:2px solid var(--ink);border-radius:12px;overflow:hidden}
+.tabs button{border:0;background:none;padding:10px 20px;min-height:44px;font-weight:800;font-size:17px;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--ink);color:var(--bg)}
+.opts{display:flex;flex-wrap:wrap;gap:10px 24px;align-items:center;margin-top:18px}
+.vg,.og{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.gl{font-weight:600;font-size:14px;color:var(--mute);margin-right:4px}
+.chip{border:1.5px solid var(--line);background:var(--bg);border-radius:999px;padding:8px 14px;min-height:40px;font-size:15px;cursor:pointer}
+.chip[aria-pressed=true]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+.ck{display:inline-flex;gap:8px;align-items:center;font-size:15px;min-height:40px;cursor:pointer}
+.ck input{width:20px;height:20px;accent-color:var(--blue);margin:0}
+.phs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:22px}
+.st{position:relative;border:0;background:none;text-align:left;padding:30px 8px 4px 0;cursor:pointer;font-size:14px;color:var(--mute);hyphens:auto;overflow-wrap:anywhere}
+@media(max-width:600px){.st{font-size:13px}.st:not(.cur) span{display:none}}
+.st::before{content:"";position:absolute;top:10px;left:0;right:0;height:6px;background:var(--line)}
+.st i{position:absolute;top:3px;left:0;width:20px;height:20px;border-radius:50%;background:var(--bg);border:5px solid var(--line)}
+.st.done::before,.st.cur::before{background:var(--ink)}
+.st.done i{border-color:var(--ink)}
+.st.cur i{border-color:var(--ink);background:var(--amber);transform:scale(1.25)}
+.st.cur{color:var(--ink);font-weight:800}
+.st b{font-weight:inherit;display:block}
+.stage{display:grid;gap:24px;grid-template-columns:minmax(0,1fr) auto minmax(0,1.15fr);grid-template-areas:"tl dev insp";align-items:start;padding-top:16px}
+.tl{grid-area:tl}.dev{grid-area:dev}.insp{grid-area:insp}
+@media(max-width:1199px){.stage{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"dev insp" "tl tl"}}
+@media(max-width:759px){.stage{grid-template-columns:minmax(0,1fr);grid-template-areas:"dev" "insp" "tl"}}
+.tl{--lw:150px;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.tlb{position:relative;max-height:clamp(560px,calc(100svh - 40px),860px);overflow:auto}
+.tlh,.tr{display:grid;grid-template-columns:34px var(--lw) minmax(0,1fr)}
+.tlh{position:sticky;top:0;z-index:3;height:74px;background:var(--bg);border-bottom:1px solid var(--line)}
+.tlh .tla b{position:absolute;bottom:8px;font-size:13px;white-space:nowrap;transform-origin:0 100%;transform:translateX(-2px) rotate(-55deg)}
+.tlh .ttl{align-self:end;padding:0 12px 8px 6px;font-weight:800;font-size:14px}
+.tla{position:relative}
+.tr{width:100%;border:0;background:none;padding:0;min-height:44px;text-align:left;cursor:pointer}
+.tr:hover{background:color-mix(in srgb,var(--ink) 4%,transparent)}
+.tn{display:grid;place-items:center;font-size:13px;font-weight:600;color:var(--mute)}
+.tx{padding:9px 12px 9px 8px;font-size:14px;line-height:1.35;align-self:center;color:var(--mute)}
+.tr.done .tx{color:var(--ink)}
+.tr.cur{background:color-mix(in srgb,var(--ink) 9%,transparent)}
+.tr.cur .tn{background:var(--ink);color:var(--bg)}
+.tr.cur .tx{color:var(--ink);font-weight:600}
+.tr.off{opacity:.36}
+.tr.g-err{box-shadow:inset 4px 0 0 var(--red)}
+.tr.g-ok{box-shadow:inset 4px 0 0 var(--green)}
+.tr.g-opt{box-shadow:inset 4px 0 0 var(--mute)}
+.tr.g-par,.tr.g-and{box-shadow:inset 4px 0 0 var(--blue)}
+.tx em{font-style:normal;font-size:13px;font-weight:700;padding:0 6px;border-radius:4px;margin-right:6px;background:var(--panel);color:var(--ink)}
+.g-err .tx em{background:color-mix(in srgb,var(--red) 18%,var(--bg))}
+.gp{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--amber);margin-left:6px}
+.tph{padding:9px 12px;font-weight:800;font-size:14px;background:var(--panel);border-block:1px solid var(--line)}
+.ln{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:color-mix(in srgb,currentColor 28%,transparent)}
+.ar{position:absolute;top:50%;height:3px;margin-top:-1.5px;background:currentColor}
+.ar.r{background:repeating-linear-gradient(90deg,currentColor 0 6px,transparent 6px 10px)}
+.ar::after{content:"";position:absolute;top:50%;margin-top:-6px;border:6px solid transparent}
+.ar.rt::after{right:-3px;border-left:9px solid currentColor;border-right:0}
+.ar.lt::after{left:-3px;border-right:9px solid currentColor;border-left:0}
+.ar.a::after{width:9px;height:9px;margin-top:-4.5px;border:0;border-top:3px solid currentColor;border-right:3px solid currentColor}
+.ar.a.rt::after{right:0;transform:rotate(45deg)}
+.ar.a.lt::after{left:0;transform:rotate(-135deg)}
+.dot,.self{position:absolute;top:50%;border-radius:50%;background:var(--bg);border:3px solid currentColor}
+.dot{width:11px;height:11px;margin:-5.5px 0 0 -5.5px}
+.self{width:18px;height:18px;margin:-9px 0 0 -9px}
+.c-V{color:var(--ink)}.c-LA{color:var(--blue)}.c-LB{color:var(--blue2)}.c-KA{color:var(--green)}.c-BS{color:var(--green2)}
+.dev{display:flex;flex-direction:column;align-items:center;gap:14px}
+.phone{height:clamp(560px,calc(100svh - 170px),660px);aspect-ratio:316/650;border-radius:48px;background:#0b0c0e;padding:10px;box-shadow:inset 0 0 0 2px #2c3036,0 28px 50px -28px rgba(0,0,0,.55)}
+@media(max-width:759px){.phone{height:auto;width:min(316px,100%)}}
+#scr{position:relative;width:100%;height:100%;border-radius:39px;overflow:hidden;background:#fff;color:#111;font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color-scheme:light}
+.ctl{display:flex;gap:8px;width:100%;max-width:340px}
+.ctl button{flex:1;min-height:44px;border:1.5px solid var(--line);background:var(--bg);border-radius:12px;font-weight:600;cursor:pointer}
+.ctl button.main{background:var(--ink);color:var(--bg);border-color:var(--ink);flex:1.3}
+.ctl button:disabled{opacity:.4;cursor:default}
+.prog{width:100%;max-width:340px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--ink);transition:width .25s}
+.cap{margin:0;max-width:340px;text-align:center;font-size:14px;color:var(--mute);min-height:2.8em}
+.cap b{color:var(--ink)}
+.met{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%;max-width:340px}
+.met div{border-top:3px solid var(--ink);padding-top:6px;font-size:13px;line-height:1.25;color:var(--mute)}
+.met b{display:block;font-size:24px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.met small{font-size:14px;color:var(--mute);font-weight:600}
+.insp{border:1px solid var(--line);border-radius:16px;padding:20px}
+.ih{display:flex;gap:16px;align-items:center}
+.inum{font-weight:800;font-size:52px;line-height:1;letter-spacing:-.02em;min-width:1.15em}
+.iph{margin:0;color:var(--mute);font-size:14px}
+.idir{margin:6px 0 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pc{display:inline-block;padding:3px 10px;border-radius:999px;font-size:14px;font-weight:600;background:currentColor}
+.pc span{color:var(--bg)}
+.ia{font-weight:800}
+.itx{font-size:17px;margin:14px 0 10px}
+.b{display:inline-block;padding:3px 9px;border-radius:6px;font-size:13px;font-weight:600;background:var(--panel);margin:0 6px 6px 0}
+.b.ta{background:color-mix(in srgb,var(--green) 18%,var(--bg))}
+.b.gap{background:var(--amberbg);box-shadow:inset 0 0 0 1.5px var(--amber)}
+.b.le{background:color-mix(in srgb,var(--blue) 15%,var(--bg))}
+.b.kk{background:color-mix(in srgb,var(--green) 12%,var(--bg))}
+.b.err{background:color-mix(in srgb,var(--red) 18%,var(--bg))}
+.blk{margin-top:18px}
+.blk h3{font-size:15px;margin:0 0 8px}
+.nt{margin:12px 0 0;padding-left:12px;border-left:3px solid var(--line);font-size:15px}
+table.kv{width:100%;border-collapse:collapse;font-size:14px}
+.kv td{border-top:1px solid var(--line);padding:7px 10px 7px 0;vertical-align:top;overflow-wrap:anywhere}
+.kv td:first-child{color:var(--mute);width:36%}
+.kv td:last-child{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:13px}
+details{margin-top:8px}
+summary{cursor:pointer;font-weight:600;font-size:14px;padding:6px 0}
+pre{margin:0;overflow-x:auto}
+pre.raw{font:13px/1.55 "JetBrains Mono",ui-monospace,monospace;background:var(--code);border-radius:12px;padding:12px 14px;white-space:pre-wrap;overflow-wrap:anywhere}
+pre.code{font:13px/1.55 "JetBrains Mono",ui-monospace,monospace;background:var(--code);border-radius:12px;padding:12px 0;max-height:460px;overflow:auto}
+pre.code .l{display:block;padding:0 14px;white-space:pre;min-width:max-content}
+pre.code .l.d{background:var(--amberbg);box-shadow:inset 3px 0 0 var(--amber)}
+.k{color:var(--blue)}.v{color:var(--green2)}.a{color:var(--mute)}
+.pbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
+.pbar h3{margin:0;flex:1 1 auto}
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:none;padding:5px 12px;min-height:34px;font-size:13px;font-weight:600;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.cp{border:1.5px solid var(--line);background:none;border-radius:8px;padding:5px 12px;min-height:34px;font-size:13px;font-weight:600;cursor:pointer}
+.prof{margin:0 0 8px;font-size:14px;color:var(--mute)}
+code{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.9em;overflow-wrap:anywhere}
+.leg{margin:8px 0 0;font-size:13px;color:var(--mute);display:flex;gap:8px;align-items:center}
+.leg i{width:14px;height:14px;border-radius:3px;background:var(--amberbg);box-shadow:inset 3px 0 0 var(--amber)}
+.ops{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.ops li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;padding:10px 12px;border-radius:10px;background:var(--amberbg);font-size:14px}
+.ops li b{grid-column:2}
+.ops li span{grid-column:2}
+.opn{grid-row:span 2;width:28px;height:28px;border-radius:50%;background:var(--amber);color:#111;font-weight:800;display:grid;place-items:center}
+.gaps{border-top:1px solid var(--line);margin-top:28px}
+.gcols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 40px}
+@media(max-width:759px){.gcols{grid-template-columns:minmax(0,1fr)}.tl{--lw:120px}.gl2 li{grid-template-columns:84px minmax(0,1fr)}}
+.gaps h2{font-size:24px;line-height:1.15;margin:0 0 12px;font-weight:800}
+.gl2{list-style:none;margin:0;padding:0}
+.gl2 li{display:grid;grid-template-columns:118px minmax(0,1fr);gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:15px;align-items:start}
+.gl2 .chips{display:flex;gap:4px;flex-wrap:wrap}
+.sn{min-width:36px;height:30px;border-radius:8px;border:1.5px solid var(--ink);background:none;font-weight:800;font-size:14px;cursor:pointer}
+.sn.am{border-color:var(--amber);background:var(--amberbg)}
+.gl2 b{display:block}
+.empty{color:var(--mute)}
+.apib{grid-column:1/-1}
+.apil li{grid-template-columns:minmax(0,21em) minmax(0,13em) minmax(0,1fr)}
+.apil code{font-size:14px}
+.apil .chips{align-items:center;font-size:14px;color:var(--mute);gap:6px}
+@media(max-width:759px){.apil li{grid-template-columns:minmax(0,1fr)}}
+footer{font-size:14px;color:var(--mute);border-top:1px solid var(--line)}
+footer p{margin:0 0 6px;max-width:100ch}
+/* ---- Gerät ---- */
+.sc{position:absolute;inset:0;display:flex;flex-direction:column}
+.sc::after{content:"";position:absolute;bottom:7px;left:50%;width:118px;height:5px;margin-left:-59px;border-radius:3px;background:rgba(120,120,120,.7);z-index:9}
+.sc.in{animation:ain .4s cubic-bezier(.2,.8,.2,1)}
+.sc.back{animation:aback .4s cubic-bezier(.2,.8,.2,1)}
+@keyframes ain{from{transform:translateX(26%) scale(.93);opacity:0}}
+@keyframes aback{from{transform:translateX(-26%) scale(.93);opacity:0}}
+.sb{height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:4px 20px 0 18px;font-weight:600;font-size:14px;position:relative;z-index:2}
+.sb>span:first-child{max-width:calc(50% - 46px);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding-left:4px;font-size:13px;letter-spacing:-.01em}
+.isl{position:absolute;left:50%;top:11px;width:84px;height:28px;margin-left:-42px;background:#000;border-radius:20px}
+.sbr{display:flex;gap:5px;align-items:center;font-size:13px}
+.sig{display:inline-flex;gap:2px;align-items:flex-end;height:11px}
+.sig b{width:3px;background:currentColor;border-radius:1px}
+.sig b:nth-child(1){height:4px}.sig b:nth-child(2){height:6px}.sig b:nth-child(3){height:8px}.sig b:nth-child(4){height:11px}
+.bat{width:23px;height:11px;border:1.5px solid currentColor;border-radius:3px;position:relative;opacity:.9}
+.bat::after{content:"";position:absolute;top:1.5px;bottom:1.5px;left:1.5px;right:6px;background:currentColor;border-radius:1px}
+.wall{flex:1;display:flex;flex-direction:column;color:#fff;background:linear-gradient(165deg,#173a5e,#0f6b58 58%,#d9a441)}
+.lt{font-size:72px;font-weight:600;text-align:center;letter-spacing:-.02em;margin-top:18px;line-height:1}
+.ldt{text-align:center;font-size:17px;font-weight:600;margin:6px 0 22px}
+.ntc{margin:8px 12px 0;padding:11px 13px;border-radius:18px;background:rgba(255,255,255,.86);color:#111;text-align:left;border:0;width:auto;font:inherit;cursor:pointer;display:block}
+.ntc .nh{display:flex;gap:8px;align-items:center;font-size:13px;color:#555;margin-bottom:3px}
+.ntc .nh em{margin-left:auto;font-style:normal}
+.ntc p{margin:2px 0 0}
+.mi{width:20px;height:20px;border-radius:5px;color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center}
+.mi.ler{background:#0a5cff}.mi.kk{background:#00a05a}
+.hg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px 6px;padding:24px 16px 0;text-align:center;font-size:13px}
+.hg>div{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ic{display:grid;place-items:center;width:56px;height:56px;margin:0 auto 5px;border-radius:14px;font-weight:800;font-size:18px;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.app{flex:1;display:flex;flex-direction:column;background:#f2f4f7}
+.ler{--ac:#0a5cff}.kk{--ac:#00a05a}
+.top{background:var(--ac);color:#fff;flex:none}
+.ah{display:flex;align-items:center;gap:10px;padding:4px 18px 13px;font-weight:700;font-size:17px}
+.lg{width:30px;height:30px;border-radius:8px;background:#fff;color:var(--ac);display:grid;place-items:center;font-weight:800;font-size:13px}
+.ab{flex:1;padding:16px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.ab h2{font-size:20px;line-height:1.2;margin:2px 0 0}
+.ab p{margin:0}
+.card{background:#fff;border-radius:16px;padding:14px;box-shadow:0 1px 2px rgba(0,0,0,.07)}
+.pb{appearance:none;border:0;border-radius:14px;background:var(--ac);color:#fff;font:600 16px/1.2 system-ui,sans-serif;padding:14px;width:100%;cursor:pointer}
+.pb.o{background:#fff;color:#c4211b;box-shadow:inset 0 0 0 1.5px #e6261f}
+.pb.busy{opacity:.75;display:flex;gap:10px;justify-content:center;align-items:center}
+.tb{background:none;border:0;color:#5b6472;font:15px system-ui,sans-serif;padding:8px;cursor:pointer}
+[data-act]{animation:pul 1.8s ease-out infinite}
+@keyframes pul{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ac,#0a5cff) 60%,transparent)}75%,100%{box-shadow:0 0 0 12px transparent}}
+.chk{list-style:none;margin:8px 0 0;padding:0}
+.chk li{display:flex;gap:10px;align-items:center;padding:5px 0;color:#9aa1ab}
+.chk li i{flex:none;width:18px;height:18px;border-radius:50%;border:2px solid #c9ced6;position:relative}
+.chk li.run,.chk li.ok{color:#111}
+.chk li.run i{border-color:var(--ac);border-top-color:transparent;animation:spin .8s linear infinite}
+.chk li.ok i{background:var(--ac);border-color:var(--ac)}
+.chk li.ok i::after,.okb::after{content:"";position:absolute;left:5px;top:2px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.res{margin-top:10px;border-radius:12px;padding:10px 12px;background:#fff1c7}
+.res.good{background:#dff5ea}
+.res b{display:block}
+.lbl{font-size:13px;font-weight:600;color:#6b7380}
+.sk{height:56px;border-radius:14px;background:#e6eaef}
+.spl{flex:1;display:grid;place-content:center;justify-items:center;gap:14px;background:var(--ac);color:#fff;font-weight:700;font-size:18px}
+.big{width:86px;height:86px;border-radius:22px;background:#fff;color:var(--ac);font:800 32px Figtree,sans-serif;display:grid;place-items:center}
+.spin{width:32px;height:32px;border-radius:50%;border:4px solid rgba(127,127,127,.25);border-top-color:var(--ac,#fff);animation:spin .8s linear infinite;flex:none}
+.spl .spin{border-top-color:#fff}
+.spin.s{width:18px;height:18px;border-width:3px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ld{flex:1;display:grid;place-content:center;justify-items:center;gap:12px;text-align:center;color:#3b4350}
+.fin{display:grid;justify-items:center;text-align:center;gap:8px;padding:18px 4px 4px}
+.okb{width:64px;height:64px;border-radius:50%;background:var(--ac);position:relative}
+.okb::after{left:24px;top:14px;width:12px;height:24px;border-width:0 4px 4px 0}
+.okb.no{background:#e6261f}
+.okb.no::after{left:30px;top:14px;width:0;height:30px;border-width:0 4px 0 0;transform:rotate(45deg)}
+.okb.no::before{content:"";position:absolute;left:30px;top:14px;height:30px;border-left:4px solid #fff;transform:rotate(-45deg)}
+.pair{display:flex;align-items:center;justify-content:center;gap:14px;padding:10px 0}
+.pair .big{width:62px;height:62px;font-size:22px;border-radius:16px;color:#fff}
+.pair .arw{font-size:24px;color:#6b7380}
+.pts{margin:0;padding-left:18px;display:grid;gap:4px}
+.cbx{display:flex;gap:8px;align-items:center;font-size:14px}
+.cbx i{width:20px;height:20px;border-radius:6px;background:var(--ac);position:relative;flex:none}
+.cbx i::after{content:"";position:absolute;left:7px;top:3px;width:4px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.trip .tt{font-weight:700;font-size:16px}
+.trip .tm{color:#5b6472;margin:2px 0 10px}
+.route{display:grid;gap:8px;position:relative;padding-left:20px}
+.route::before{content:"";position:absolute;left:5px;top:7px;bottom:7px;width:2px;background:#c9ced6}
+.route span{position:relative}
+.route span::before{content:"";position:absolute;left:-20px;top:4px;width:12px;height:12px;border-radius:50%;border:3px solid var(--ac);background:#fff}
+dl.rv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 12px;margin:8px 0 0;font-size:14px}
+dl.rv dt{color:#6b7380}dl.rv dd{margin:0;font-weight:600}
+.who{font-weight:700;font-size:16px}
+.lst{display:grid;gap:8px}
+.lst .card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 12px;padding:11px 13px}
+.lst .d{grid-row:span 2;font-weight:800;color:var(--ac);text-align:center;line-height:1.1;font-size:15px}
+.lst small{color:#6b7380;font-size:13px}
+.tag{display:inline-block;background:#dff5ea;color:#00693b;border-radius:999px;padding:2px 9px;font-size:13px;font-weight:600}
+.opb{border:2px dashed #e0a800;border-radius:16px;padding:16px;background:#fffaf0;color:#3b2f00;display:grid;gap:6px}
+.opb b{font-size:16px}
+.web{background:#fff}
+.web .top{background:#eef0f3;color:#111}
+.url{margin:2px 12px 10px;background:#fff;border-radius:10px;padding:8px 12px;text-align:center;font-size:14px;color:#333}
+.lnk{position:absolute;bottom:24px;left:12px;right:12px;z-index:6;background:rgba(17,20,24,.9);color:#fff;border-radius:14px;padding:9px 12px;font:13px/1.35 "JetBrains Mono",monospace;display:flex;gap:9px;align-items:flex-start;animation:drop .45s ease-out}
+.lnk span{overflow-wrap:anywhere}
+.lnk svg{flex:none;margin-top:2px}
+@keyframes drop{from{transform:translateY(14px);opacity:0}}
+.toast{position:absolute;left:14px;right:14px;bottom:96px;z-index:8;background:#111;color:#fff;border-radius:14px;padding:12px 14px;font-size:14px;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none}
+.toast.on{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.sc.in,.sc.back,.lnk,[data-act]{animation:none}[data-act]{outline:3px solid color-mix(in srgb,var(--ac,#0a5cff) 55%,transparent);outline-offset:2px}.prog i{transition:none}}
+</style>
+</head>
+<body>
+<header class="band hd"><div class="wrap">
+  <div class="hrow">
+    <div>
+      <h1>eLB App-Flow</h1>
+      <p class="sub">Klickbarer Ablauf aus <a href="https://github.com/kreyssel/eLB/blob/FAHRKOSTEN-DRAFT/docs/APPFLOW.md">docs/APPFLOW.md</a> (Branch FAHRKOSTEN-DRAFT). In der Mitte das Gerät der Versicherten, links der Sequenzfahrplan, rechts alles, was im jeweiligen Schritt übertragen wird.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Workflow">
+      <button role="tab" data-flow="A" id="tab-A">Anmeldung</button>
+      <button role="tab" data-flow="B" id="tab-B">Bestätigung</button>
+    </div>
+  </div>
+  <div class="opts"><div class="vg" id="vg"></div><div class="og" id="og"></div></div>
+  <nav class="phs" id="ph" aria-label="Phasen"></nav>
+</div></header>
+
+<main class="band" style="padding-top:0"><div class="wrap stage">
+  <section class="tl" aria-label="Sequenzfahrplan">
+    <div class="tlb" id="tlb"></div>
+  </section>
+  <section class="dev" aria-label="Gerät der Versicherten">
+    <div class="phone"><div id="scr"></div></div>
+    <div class="ctl">
+      <button id="b-rs" title="Neu starten">Neu</button>
+      <button id="b-pv">Zurück</button>
+      <button id="b-pl" class="main">Abspielen</button>
+      <button id="b-nx">Weiter</button>
+    </div>
+    <div class="prog"><i id="pbar"></i></div>
+    <p class="cap" id="cap" aria-live="polite"></p>
+    <div class="met" id="met"></div>
+  </section>
+  <section class="insp" id="insp" aria-live="polite"></section>
+</div></main>
+
+<section class="band gaps"><div class="wrap gcols">
+  <div><h2>Was die Spezifikation für diesen Ablauf noch braucht</h2><ul class="gl2" id="gl"></ul></div>
+  <div><h2>Offene Punkte aus der APPFLOW.md</h2><ul class="gl2" id="ol"></ul></div>
+  <div class="apib"><h2>Kassen-API im Ablauf</h2><p class="sub">Endpunkte aus der api-docs.json (eLB server REST API 1.0, Bearer-JWT mit Claim kvnr) und die Schritte, in denen sie vorkommen.</p><ul class="gl2 apil" id="al"></ul></div>
+</div></section>
+
+<footer class="band"><div class="wrap">
+  <p>Grundlage: <a href="https://github.com/kreyssel/eLB/blob/FAHRKOSTEN-DRAFT/docs/APPFLOW.md">docs/APPFLOW.md</a>, <a href="https://github.com/kreyssel/eLB/blob/FAHRKOSTEN-DRAFT/docs/elb-openapi.yaml">docs/elb-openapi.yaml</a> und die Profile/Beispiele im Branch FAHRKOSTEN-DRAFT. Transport nach TA eLB 02.01: POST, multipart/form-data, mTLS, nutzdaten SECON-verschlüsselt.</p>
+  <p>Beispieldaten: eKVNR, IKs, ChargeItem (Krankentransport, SGS E) und Antwort-Bundle stammen aus den Repo-Beispielen. Die Aufrufe zwischen Kassen-App und Bestätigungssystem folgen der api-docs.json (eLB server REST API 1.0, Testserver app-elb-connect-ans-test.davaso.de). App-Namen, Domains (.example), Pseudonym und die herstellerinternen Schnittstellen des Leistungserbringers sind zur Veranschaulichung ausgedacht. Tastatur: Pfeil links/rechts blättert.</p>
+</div></footer>
+
+<script>
+{
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const val=x=>typeof x==='function'?x():x;
+const IK_LE='345678901',IK_KK='101575519',IK_BS='123456780',KVNR='K121212345',PSEUDO='5b1d0f3e-8c2a-4e7b-9a41-2f6c8d0e3b17',REQ='aabb1111-2222-3333-4444-555566667777';
+const SD='https://e-lb.de/fhir/StructureDefinition/',IKS='http://fhir.de/sid/arge-ik/iknr',KVS='http://fhir.de/sid/gkv/kvid-10';
+const HOST='elb.musterkasse.example',BASE='https://'+HOST+'/api',API='https://app-elb-connect-ans-test.davaso.de';
+const JWT='Authorization: Bearer ‹JWT der Kassen-App, Claim kvnr = '+KVNR+'›';
+const CRDTO=()=>({id:REQ,payorIk:IK_KK,serviceNumber:'50101',serviceName:null,serviceDescription:null,state:'UNKNOWN',creationTime:'2026-05-13T08:20:00+02:00',occurrence:{start:'2026-05-13T07:30:00+02:00',end:'2026-05-13T08:15:00+02:00'},performer:{sgs:'E',organization:{ik:IK_LE,name:'Krankentransport Müller GmbH',country:null,zipCode:null,city:null,street:null}},servicePatientTransport:{from:{country:'DE',zipCode:'04109',city:'Leipzig',street:'Beispielstraße 12'},to:{country:'DE',zipCode:'04103',city:'Leipzig',street:'Liebigstraße 20'}},callbackDeepLink:CB_B,_dk:['callbackDeepLink']});
+const WH_A='https://api.mueller-ktw.example/elb/webhook/participation',WH_B='https://api.mueller-ktw.example/elb/webhook/confirmation';
+const CB_A='https://app.mueller-ktw.example/elb/return?pseudonym='+PSEUDO,CB_B='https://app.mueller-ktw.example/elb/return?requestId='+REQ;
+const DL_A='https://app.musterkasse.example/elb/consent?pseudonym='+PSEUDO,DL_B='https://app.musterkasse.example/elb/confirm?requestId='+REQ;
+const P={V:{n:'Versicherte:r',s:'V'},LA:{n:'Leistungserbringer-FdV',s:'LE-App'},LB:{n:'Leistungserbringer-Backend',s:'LE-BE'},KA:{n:'Krankenkassen-FdV',s:'KK-App'},BS:{n:'Bestätigungssystem',s:'BS'}};
+const LANES=['V','LA','LB','KA','BS'];
+const S={flow:'A',v:{A:'happy',B:'happy'},o:{A:{login:true},B:{login:false,late:false}},ix:{A:0,B:0},dec:'ok',fmt:'json',play:false,dir:1,last:null,path:[]};
+const stc=()=>S.dec==='ok'?'billable':'not-billable';
+
+/* ---------- FHIR-Bausteine (aus den Repo-Beispielen) ---------- */
+const id=(system,value)=>({system,value});
+const prof=n=>({profile:[SD+n]});
+const ci=st=>({resourceType:'ChargeItem',meta:{profile:[SD+'KK_ELB_ChargeItem'],security:[{system:'https://e-lb.de/fhir/CodeSystem/KK_ELB_CS_Nutzungsbedingung_Version',code:'1'}]},
+ extension:[{url:SD+'KK_ELB_Payor',valueIdentifier:id(IKS,IK_KK)},{url:SD+'KK_ELB_EX_Krankentransport',extension:[{url:'startort',valueAddress:{type:'physical',line:['Beispielstraße 12'],city:'Leipzig',postalCode:'04109',country:'DE'}},{url:'zielort',valueAddress:{type:'physical',line:['Liebigstraße 20'],city:'Leipzig',postalCode:'04103',country:'DE'}}]}],
+ identifier:[id('urn:ietf:rfc:3986','urn:uuid:'+REQ)],status:st,code:{coding:[{system:'https://e-lb.de/fhir/sid/KK_ELB_ChargeItemCode',code:'50101'}]},
+ subject:{identifier:id(KVS,KVNR)},occurrencePeriod:{start:'2026-05-13T07:30:00+02:00',end:'2026-05-13T08:15:00+02:00'},
+ performer:[{function:{coding:[{system:'https://e-lb.de/fhir/CodeSystem/KK_ELB_SGS',code:'E'}]},actor:{type:'Organization',identifier:id(IKS,IK_LE),display:'Krankentransport Müller GmbH'}}]});
+const bundle=st=>({resourceType:'Bundle',meta:prof('KK_ELB_ResponseDocumentBundle'),identifier:id('urn:ietf:rfc:3986','urn:uuid:bbcc2222-3333-4444-5555-666677778888'),type:'document',timestamp:'2026-05-13T10:30:00Z',
+ entry:[{fullUrl:'urn:uuid:ccdd3333-4444-5555-6666-777788889999',resource:{resourceType:'Composition',meta:prof('KK_ELB_ResponseComposition'),status:'final',type:{coding:[{system:'http://dvmd.de/fhir/CodeSystem/kdl',code:'AM190107'}]},date:'2026-05-13T10:00:00Z',author:[{identifier:id(IKS,IK_BS)}],title:'Elektronische Leistungsbestätigung',section:[{entry:[{reference:'urn:uuid:ddee4444-5555-6666-7777-888899990000'}]}]}},
+  {fullUrl:'urn:uuid:ddee4444-5555-6666-7777-888899990000',resource:ci(st)}],
+ signature:{type:[{system:'urn:iso-astm:E1762-95:2013',code:'1.2.840.10065.1.12.1.5'}],when:'2026-05-13T10:30:00+02:00',who:{identifier:id(IKS,IK_BS)},sigFormat:'application/signature+xml',data:'TG9yZW0gaXBzdW0gZG9sciBzaXI='}});
+const respP=()=>({resourceType:'Parameters',meta:prof('KK_ELB_ResponseParameters'),parameter:[{name:'emailContactPoint',valueContactPoint:{system:'email',value:'bestaetigungssystem@example.com'}},{name:'softwareIdentifier',valueString:'bestaetigungssystem.example.com@1.0.9'},{name:'responseBundle',resource:bundle(stc())}]});
+const oo=(code,txt)=>({resourceType:'OperationOutcome',_d:1,issue:[{severity:'error',code,diagnostics:txt}]});
+const ERRNOTE='Die TA legt für Fehler nur HTTP-Status ≥ 400 fest (Code hier beispielhaft); Details stehen in den nutzdaten. Ein Profil dafür enthält das Repo nicht – OperationOutcome ist ein Vorschlag.';
+const ERRGAP='Fehlerantwort: Aufbau der nutzdaten bei HTTP ≥ 400 festlegen.';
+const DLGAP='Deep Links: Domain, Pfad und Parameter festlegen.';
+
+/* ---------- Schritte ---------- */
+const st=(n,f,t,a,x,o)=>({n,f,t,a,x,...o});
+const A=[
+st(1,'V','V','s','Informationen von Krankenkasse erhalten',{ph:0,sc:'home',k:'ui',sp:'ui',note:'Die Krankenkasse informiert über das eLB-Verfahren, etwa per Brief oder Nachricht. Technisch wird hier nichts übertragen.'}),
+st(2,'V','LA','s','Leistungserbringer-FdV öffnen',{ph:0,sc:'ler-splash',k:'ui',sp:'ui',note:'Tipp auf das App-Icon des Fahrdienstes.'}),
+st(3,'LA','LB','s','Informationen zum Versicherten laden',{ph:0,sc:'ler-check',k:'intern',sp:'le',m:'GET',url:'https://api.mueller-ktw.example/v1/patients/me',hdr:['Authorization: Bearer ‹App-Sitzung›'],note:'Die Schnittstelle zwischen App und Backend legt der Hersteller fest; hier beispielhaft.'}),
+st(4,'LB','LB','s','Pseudonym (UUID) für eKVNR erstellen und speichern sowie Callback-Deep-Link (Universal Link/App Link) für Rücksprung in Leistungserbringer-FdV erzeugen',{ph:1,sc:'ler-check',k:'local',sp:'lokal',kv:[['eKVNR',KVNR],['Pseudonym (UUID v4)',PSEUDO],['Webhook-URL',WH_A],['Callback-Deep-Link',CB_A]],note:'Das Pseudonym verknüpft die spätere Zustimmung in der Kassen-App mit diesem Vorgang. In den Deep Links steht nur das Pseudonym, die eKVNR bleibt im Backend.'}),
+st(5,'LB','BS','s','Prüfen, ob eKVNR am eLB-Verfahren teilnimmt – Übergabe eKVNR, Pseudonym, Webhook-URL, Callback-Deep-Link',{ph:1,sc:'ler-check',k:'http',sp:'gap',path:'/participation-status-query',pl:()=>({resourceType:'Parameters',meta:prof('KK_ELB_ParticipationStatusRequestParameters'),parameter:[{name:'patient',valueIdentifier:id(KVS,KVNR)},{name:'payor',valueIdentifier:id(IKS,IK_KK)},{_d:1,name:'pseudonym',valueUuid:'urn:uuid:'+PSEUDO},{_d:1,name:'webhookUrl',valueUrl:WH_A},{_d:1,name:'callbackDeepLink',valueUrl:CB_A}]}),note:'Transport nach TA eLB, Kapitel 5.5. Das Profil lässt genau zwei Parameter zu (patient, payor). Für Pseudonym, Webhook-URL und Callback-Deep-Link braucht es neue Parameter; die Namen hier sind Platzhalter.',gap:'Teilnehmerabfrage: Parameter für Pseudonym, Webhook-URL und Callback-Deep-Link ergänzen – das Profil erlaubt genau patient und payor.'}),
+st(6,'BS','BS','s','Callback-Deep-Link gegen Registry prüfen',{ph:1,sc:'ler-check',k:'local',sp:'lokal',kv:()=>[['Callback-Deep-Link-Domain','app.mueller-ktw.example – '+(S.v.A==='registry'?'nicht in Registry ✗':'in Registry ✓')],['Webhook-URL-Domain','api.mueller-ktw.example – wird hier nicht geprüft']]}),
+st(7,'BS','LB','r','Fehlermeldung',{ph:1,g:'err',sc:'op',k:'http',sp:'gap',status:'400 Bad Request',pl:()=>oo('security','Domain app.mueller-ktw.example des Callback-Deep-Links ist nicht in der Registry eingetragen'),note:ERRNOTE,gap:ERRGAP}),
+st(8,'BS','BS','s','Webhook-URL und Callback-Deep-Link zusammen mit eKVNR + Pseudonym speichern',{ph:1,sc:'ler-check',k:'local',sp:'lokal',kv:[['eKVNR',KVNR],['Pseudonym',PSEUDO],['Webhook-URL',WH_A],['Callback-Deep-Link',CB_A]],note:'Wie lange der Eintrag gültig bleibt, ist noch festzulegen (vgl. Offener Punkt 3, abgelaufenes Pseudonym).'}),
+st(9,'BS','LB','r','Teilnahmestatus',{ph:1,sc:'ler-check',k:'http',sp:()=>S.v.A==='consent'?'ta':'gap',pl:()=>({resourceType:'Parameters',meta:prof('KK_ELB_ParticipationStatusResponseParameters'),parameter:[{name:'isParticipating',valueBoolean:S.v.A==='consent'},...(S.v.A==='consent'?[]:[{_d:1,name:'consentDeepLink',valueUrl:DL_A}])]}),note:()=>S.v.A==='consent'?'isParticipating = true: die Zustimmung liegt bereits vor.':'isParticipating = false: die Zustimmung steht noch aus. Gelb: Option aus Offenem Punkt 6 – die Kasse liefert ihren Consent-Deep-Link gleich mit.',gap:'Teilnahmeantwort: Platz für den Consent-Deep-Link der Kasse schaffen (Option aus Offenem Punkt 6).'}),
+st(10,'LB','LA','r','Rückmeldung: Zustimmung liegt vor',{ph:1,g:'ok',sc:'ler-ready',k:'intern',sp:'le',status:'200 OK',pl:{elbStatus:'aktiv'}}),
+st(11,'V','LA','s','Weiter im Leistungs-Workflow',{ph:1,g:'ok',sc:'ler-trips',k:'ui',sp:'ui',note:'Die Versicherte arbeitet in der App weiter; ein Wechsel zur Kassen-App ist nicht nötig.'}),
+st(12,'LB','LA','r','Rückmeldung „Zustimmung liegt nicht vor“ inkl. Übergabe Pseudonym',{ph:2,sc:'ler-check',k:'intern',sp:'le',status:'200 OK',pl:{elbStatus:'zustimmung-erforderlich',pseudonym:PSEUDO,consentDeepLink:DL_A,_dk:['consentDeepLink']}}),
+st(13,'LA','LA','s','Hinweis anzeigen: „Zustimmung zum eLB-Verfahren fehlt und muss in der Krankenkassen-FdV erteilt werden“ – Wechsel dorthin folgt',{ph:2,sc:'ler-hint',k:'ui',sp:'ui',note:'Die App erklärt den bevorstehenden Wechsel in die Kassen-App.'}),
+st(14,'LA','KA','s','Krankenkassen-FdV per „eLB consent“-Deep-Link inkl. Pseudonym aufrufen',{ph:2,sc:'kk-splash',k:'deeplink',sp:'neu',url:DL_A,note:'Das Betriebssystem öffnet die Kassen-App, wenn deren Domain den Pfad freigibt; sonst öffnet sich der Browser.',gap:DLGAP}),
+st(15,'KA','KA','s','Krankenkassen-FdV kommt in den Vordergrund',{ph:2,sc:'kk-entry',k:'os',sp:'os',note:'Die Kassen-App erscheint. iOS zeigt oben links „◀ Müller KTW“ als Weg zurück.'}),
+st(16,'V','KA','s','Anmeldung',{ph:2,g:'opt',sc:'kk-consent',k:'ui',sp:'ui',note:'Nur nötig, wenn in der Kassen-App keine aktive Sitzung besteht.'}),
+st(17,'V','KA','s','Versicherter bestätigt Teilnahme am eLB-Verfahren',{ph:2,sc:'kk-saving',k:'ui',sp:'ui',note:'Tipp auf „Teilnahme bestätigen“.'}),
+st(18,'KA','BS','s','Teilnahmebestätigung inkl. eKVNR + Pseudonym übermitteln',{ph:2,sc:'kk-saving',k:'intern',sp:'apigap',m:'POST',url:API+'/app/register-insurant',hdr:[JWT],pl:{pseudonym:PSEUDO,_d:1},plLabel:'Request-Body – in der API bisher nicht vorgesehen',note:'Kassen-API registerInsurant: die eKVNR kommt als Claim kvnr im JWT, einen Request-Body sieht die API nicht vor. Für das Pseudonym aus dem Consent-Deep-Link gibt es damit keinen Platz – ohne Pseudonym kann das Bestätigungssystem die Suche in Schritt 20 nicht ausführen.',gap:'Kassen-API register-insurant: Pseudonym aus dem Consent-Deep-Link übergeben – bisher kommt nur die kvnr aus dem JWT.'}),
+st(19,'BS','BS','s','Teilnahmestatus speichern',{ph:2,sc:'kk-saving',k:'local',sp:'lokal',kv:[['eKVNR',KVNR],['Teilnahme','ja'],['Zeitpunkt','11.05.2026, 09:44']]}),
+st(20,'BS','BS','s','Suche per eKVNR + Pseudonym, ob ein Callback-Deep-Link gespeichert wurde',{ph:2,sc:'kk-saving',k:'local',sp:'lokal',kv:[['Suche','eKVNR (aus JWT) + Pseudonym'],['Treffer','Eintrag aus Schritt 8 ✓'],['Callback-Deep-Link',CB_A],['Webhook-URL',WH_A]],note:'Setzt voraus, dass das Pseudonym in Schritt 18 ankommt – die Kassen-API überträgt heute nur die eKVNR.'}),
+st(21,'BS','KA','r','Sofern Eintrag gefunden, Rückmeldung des Callback-Deep-Link für Leistungserbringer-FdV',{ph:2,sc:'kk-done-a',k:'intern',sp:'apigap',status:'200 OK',pl:{kvnr:KVNR,callbackDeepLink:CB_A,_dk:['callbackDeepLink']},plLabel:'Antwort-Body (ParticipantDto)',note:'Antwort von registerInsurant ist ein ParticipantDto mit nur einem Feld, kvnr. Für den Rücksprung in Schritt 24 braucht sie zusätzlich den Callback-Deep-Link. Schritt 21 und 22 laufen zudem praktisch gleichzeitig – siehe Offener Punkt 1.',gap:'Kassen-API register-insurant: Callback-Deep-Link in der Antwort ergänzen – ParticipantDto kennt nur kvnr.'}),
+st(22,'BS','LB','s','Sofern Eintrag gefunden, Leistungserbringer-Webhook-URL inkl. eKVNR und Teilnahmestatus aufrufen',{ph:2,sc:'kk-done-a',k:'http',sp:'neu',url:WH_A,pl:()=>({resourceType:'Parameters',_d:1,parameter:[{name:'patient',valueIdentifier:id(KVS,KVNR)},{name:'pseudonym',valueUuid:'urn:uuid:'+PSEUDO},{name:'isParticipating',valueBoolean:true}]}),note:'Transport wie bei den übrigen Aufrufen, mit vertauschten Rollen: das Bestätigungssystem ist TLS-Client und iksender. Die OpenAPI beschreibt bisher nur den Webhook bestaetigungsergebnis.',gap:'Teilnahme-Webhook: Nutzdatenprofil und Eintrag unter webhooks in der OpenAPI ergänzen.'}),
+st(23,'LB','LB','s','Teilnahmestatus speichern',{ph:2,sc:'kk-done-a',k:'local',sp:'lokal',kv:[['Pseudonym',PSEUDO],['eKVNR (aus Schritt 4)',KVNR],['Teilnahmestatus','aktiv']]}),
+st(24,'KA','LA','s','Leistungserbringer-FdV mittels Callback-Deep-Link aufrufen',{ph:3,sc:'ler-loading',k:'deeplink',sp:'neu',url:CB_A,note:'Rücksprung auf die Domain des Leistungserbringers – dieselbe, die das Bestätigungssystem in Schritt 6 gegen die Registry geprüft hat.',gap:DLGAP}),
+st(25,'LA','LA','s','Leistungserbringer-FdV kommt in den Vordergrund',{ph:3,sc:'ler-loading',k:'os',sp:'os',note:'Müller KTW ist wieder vorn; oben links steht jetzt „◀ Musterkasse“.'}),
+st(26,'LA','LB','s','Teilnahmestatus prüfen',{ph:3,sc:'ler-loading',k:'intern',sp:'le',m:'GET',url:'https://api.mueller-ktw.example/v1/elb/participation?pseudonym='+PSEUDO,hdr:['Authorization: Bearer ‹App-Sitzung›']}),
+st(27,'LB','LA','r','Teilnahmestatus',{ph:3,sc:'ler-loading',k:'intern',sp:'le',status:'200 OK',pl:{elbStatus:'aktiv',seit:'2026-05-11T09:44:13+02:00'}}),
+st(28,'LA','LA','s','Info, dass das Onboarding ins eLB-Verfahren abgeschlossen ist',{ph:3,sc:'ler-onboarded',k:'ui',sp:'ui',note:'Erfolgsmeldung in der App des Leistungserbringers.'}),
+st(29,'V','LA','s','Weiter im Leistungs-Workflow',{ph:3,sc:'ler-trips',k:'ui',sp:'ui',note:'Die Versicherte arbeitet mit ihren Fahrten weiter.'})
+];
+const B=[
+st(1,'LB','LB','s','Leistung als erbracht markieren',{ph:0,sc:'lock',k:'local',sp:'lokal',kv:[['Leistung','Krankentransport, Hinfahrt zur Dialyse'],['Zeitraum','13.05.2026, 07:30–08:15'],['Abrechnungsposition','50101'],['Leistungsbereich (SGS)','E – Krankentransport'],['Startort','Beispielstraße 12, 04109 Leipzig'],['Zielort','Liebigstraße 20, 04103 Leipzig'],['eKVNR',KVNR]],note:'Der Fahrdienst schließt die Fahrt ab. Auf dem Gerät der Versicherten passiert noch nichts.'}),
+st(2,'LB','LB','s','Bestätigungsanfrage inkl. Anfrage-ID erzeugen',{ph:0,sc:'lock',k:'local',sp:'lokal',kv:[['Anfrage-ID','urn:uuid:'+REQ+' (= ChargeItem.identifier)'],['requestType','REQUEST_WITH_CALLBACK'],['callbackUrl (Webhook)',WH_B],['Callback-Deep-Link',CB_B]]}),
+st(3,'LB','BS','s','Bestätigungsanfrage anlegen (Anfrage-ID, Leistungsdaten, eKVNR, Webhook-URL und Callback-Deep-Link für Leistungserbringer-FdV)',{ph:0,sc:'lock',k:'http',sp:'gap',path:'/confirmation-request',pl:()=>({resourceType:'Parameters',meta:prof('KK_ELB_ConfirmationRequestParameters'),parameter:[{name:'requestType',valueCoding:{system:'https://e-lb.de/fhir/CodeSystem/KK_ELB_RequestType',code:'REQUEST_WITH_CALLBACK'}},{name:'callbackUrl',valueUrl:WH_B},{_d:1,name:'callbackDeepLink',valueUrl:CB_B},{name:'emailContactPoint',valueContactPoint:{system:'email',value:'endpointmanager@example.org'}},{name:'softwareIdentifier',valueString:'ktw.example.com'},{name:'chargeItem',resource:ci('unknown')}]}),note:'Transport nach TA eLB, Kapitel 5.6. Die Webhook-URL ist der vorhandene Parameter callbackUrl, die Anfrage-ID das ChargeItem.identifier. Start- und Zielort trägt die Extension KK_ELB_EX_Krankentransport (Pflicht bei SGS E). Für den Callback-Deep-Link braucht das geschlossene Slicing noch einen Parameter.',gap:'Bestätigungsanfrage: Parameter für den Callback-Deep-Link ergänzen (Slicing in KK_ELB_ConfirmationRequestParameters ist geschlossen).'}),
+st(4,'BS','BS','s','Webhook-URL und Callback-Deep-Link gegen Registry prüfen',{ph:0,sc:'lock',k:'local',sp:'lokal',kv:()=>{const r=S.v.B==='registry';return[['Webhook-URL-Domain','api.mueller-ktw.example – '+(r?'nicht in Registry ✗':'in Registry ✓')],['Callback-Deep-Link-Domain','app.mueller-ktw.example – in Registry ✓']]}}),
+st(5,'BS','LB','r','Fehlermeldung',{ph:0,g:'err',sc:'lock',k:'http',sp:'gap',status:'400 Bad Request',pl:()=>oo('security','Webhook-URL oder Callback-Deep-Link-Domain ist nicht in der Registry eingetragen'),note:ERRNOTE,gap:ERRGAP}),
+st(6,'BS','BS','s','Teilnahmestatus für eKVNR prüfen',{ph:0,sc:'lock',k:'local',sp:'lokal',kv:()=>[['eKVNR',KVNR],['Teilnahme',S.v.B==='nopart'?'nein ✗':'ja ✓ (seit der Anmeldung, dort Schritt 19)']]}),
+st(7,'BS','LB','r','Fehlermeldung',{ph:0,g:'err',sc:'lock',k:'http',sp:'gap',status:'400 Bad Request',pl:()=>oo('business-rule','Versicherte:r nimmt nicht am eLB-Verfahren teil'),note:ERRNOTE,gap:ERRGAP}),
+st(8,'BS','BS','s','Bestätigungsanfrage speichern',{ph:0,sc:'lock',k:'local',sp:'lokal',kv:[['Anfrage-ID',REQ],['Status','offen'],['eKVNR',KVNR],['Webhook-URL',WH_B],['Callback-Deep-Link',CB_B]]}),
+st(9,'BS','LB','r','Anlegen bestätigt',{ph:0,sc:'lock',k:'http',sp:'ta',status:'200 OK',plNote:'Quittung, dass die Anfrage angelegt ist. Ein eigenes Profil für diese Antwort enthält das Repo nicht.'}),
+st(10,'LB','LA','a','Push inkl. Anfrage-ID',{ph:1,sc:'lock-push',k:'push',sp:'le',pl:{aps:{alert:{title:'Müller KTW',body:'Bitte bestätigen Sie Ihre Fahrt vom 13.05., 07:30.'},sound:'default'},requestId:REQ},note:'Push über APNs (iOS) bzw. FCM (Android). Der Text erscheint auf dem Sperrbildschirm; mit der Anfrage-ID findet die App die Fahrt.'}),
+st(11,'LA','V','s','Aufforderung, die Leistung in der Krankenkassen-FdV zu bestätigen',{ph:1,sc:'ler-prompt',k:'ui',sp:'ui',note:'Die App zeigt die Fahrt und bittet um Bestätigung in der Kassen-App.'}),
+st(12,'V','LA','s','Tippt auf „Jetzt zur Krankenkassen-FdV wechseln“',{ph:1,sc:'ler-prompt',k:'ui',sp:'ui',note:'Ein Tipp der Versicherten löst den Wechsel aus.'}),
+st(13,'LA','KA','a','Krankenkassen-FdV per Deep Link inkl. Anfrage-ID öffnen',{ph:1,sc:'kk-entry-b',k:'deeplink',sp:'neu',url:DL_B,note:'Universal Link bzw. App Link in die Kassen-App; die Anfrage-ID reicht, die Leistungsdaten holt die Kassen-App selbst.',gap:DLGAP}),
+st(14,'V','KA','s','Anmeldung',{ph:2,g:'opt',sc:'kk-loading',k:'ui',sp:'ui',note:'Nur nötig, wenn in der Kassen-App keine aktive Sitzung besteht.'}),
+st(15,'KA','BS','s','Anfrage per Anfrage-ID + eKVNR laden',{ph:2,sc:'kk-loading',k:'intern',sp:'api',m:'GET',url:API+'/app/confirmation/'+REQ,hdr:[JWT],note:'Kassen-API pendingConfirmation: Anfrage-ID im Pfad, eKVNR als Claim kvnr im JWT – passt zum APPFLOW. Wird die Kassen-App ohne Deep Link geöffnet, liefert GET /app/pending-confirmations alle offenen Anfragen.'}),
+st(16,'BS','BS','s','eKVNR mit Anfrage abgleichen',{ph:2,sc:'kk-loading',k:'local',sp:'lokal',kv:()=>{const u=S.v.B==='unknown';return[['Anfrage-ID',REQ],['eKVNR der Anfrage',KVNR],['eKVNR der Sitzung',u?'K987654321':KVNR],['Ergebnis',u?'passt nicht ✗':'passt ✓']]}}),
+st(17,'BS','KA','r','Fehlermeldung',{ph:2,g:'err',sc:'kk-error',k:'intern',sp:'apigap',status:'‹Status nicht dokumentiert›',note:'Die api-docs.json beschreibt für /app/confirmation/{uuid} nur die Antwort 200. Wie eine unbekannte Anfrage oder eine nicht passende eKVNR gemeldet wird, ist offen.',gap:'Kassen-API: Fehlerantworten dokumentieren (unbekannte Anfrage, eKVNR passt nicht zur Anfrage).'}),
+st(18,'KA','V','s','Hinweis: Anfrage kann nicht angezeigt werden',{ph:2,g:'err',sc:'kk-error',k:'ui',sp:'ui',note:'Die Kassen-App zeigt einen Hinweis.'}),
+st(19,'BS','KA','r','Anfragedaten inkl. Callback-Deep-Link für die Leistungserbringer-FdV',{ph:2,sc:'kk-loading',k:'intern',sp:'apigap',status:'200 OK',pl:CRDTO,plLabel:'Antwort-Body (ConfirmationRequestDto)',note:'ConfirmationRequestDto bildet das ChargeItem ab: id = Anfrage-ID, serviceNumber = Abrechnungsposition, state = ChargeItem.status (UNKNOWN, BILLABLE, NOTBILLABLE, zusätzlich ABORTED), performer.sgs = Leistungsbereich, servicePatientTransport = Extension KK_ELB_EX_Krankentransport. Für den Callback-Deep-Link aus Schritt 3 fehlt ein Feld.',gap:'Kassen-API confirmation/{uuid}: Feld für den Callback-Deep-Link in ConfirmationRequestDto ergänzen.'}),
+st(20,'KA','V','s','Leistungsdaten anzeigen',{ph:2,sc:'kk-review',k:'ui',sp:'ui',note:'Die Versicherte sieht die Fahrt mit Zeit, Start und Ziel.'}),
+st(21,'V','KA','s','Bestätigt die Leistung oder lehnt sie ab',{ph:2,sc:'kk-sending',k:'ui',sp:'ui',note:()=>S.dec==='ok'?'Entscheidung: bestätigt.':'Entscheidung: abgelehnt.'}),
+st(22,'KA','BS','s','Bestätigungsstatus (bestätigt/abgelehnt) übermitteln',{ph:2,sc:'kk-sending',k:'intern',sp:'api',m:'POST',url:()=>API+'/app/confirmation/'+REQ+'/'+(S.dec==='ok'),hdr:[JWT],note:'Kassen-API confirmationResponse: die Entscheidung steht als Boolean im Pfad (true = bestätigt, false = abgelehnt), ohne Request-Body. Im Bestätigungsobjekt wird daraus ChargeItem.status billable bzw. not-billable.'}),
+st(23,'BS','BS','s','Bestätigungsobjekt erzeugen und speichern',{ph:2,sc:'kk-sending',k:'local',sp:'lokal',kv:()=>[['Objekt','KK_ELB_ResponseDocumentBundle'],['ChargeItem.status',stc()],['Signatur','Bundle.signature, IK '+IK_BS]],pl:()=>bundle(stc())}),
+st(24,'BS','KA','r','OK',{ph:2,sc:'kk-done-b',k:'intern',sp:'api',status:'200 OK',note:'Antwort 200 ohne Body, wie in der api-docs.json beschrieben.'}),
+st(25,'BS','LB','a','Webhook-URL mit Bestätigungsobjekt aufrufen',{ph:3,g:'par',sc:'kk-done-b',k:'http',sp:'ta',url:WH_B,pl:respP,note:'Webhook bestaetigungsergebnis aus der OpenAPI. Ziel ist die callbackUrl aus Schritt 3; das Bestätigungssystem ist TLS-Client und iksender.'}),
+st(26,'LB','LB','s','Bestätigungsobjekt speichern',{ph:3,g:'par',sc:'kk-done-b',k:'local',sp:'lokal',kv:()=>[['Bestätigungsobjekt','urn:uuid:bbcc2222-3333-4444-5555-666677778888'],['ChargeItem.status',stc()],['Quelle','Webhook (Schritt 25)']]}),
+st(27,'KA','LA','a','Callback-Deep-Link für die Leistungserbringer-FdV aufrufen',{ph:3,g:'and',sc:'ler-loading',k:'deeplink',sp:'neu',url:CB_B,note:'Läuft parallel zu Schritt 25 – die App kann vor dem Webhook ankommen.',gap:DLGAP}),
+st(28,'LA','LB','s','Status per Anfrage-ID abfragen',{ph:3,sc:'ler-loading',k:'intern',sp:'le',m:'GET',url:'https://api.mueller-ktw.example/v1/elb/requests/'+REQ+'/status',hdr:['Authorization: Bearer ‹App-Sitzung›'],note:'Fehlt der Webhook noch, holt das Backend das Ergebnis selbst ab (Schritte 29–30).'}),
+st(29,'LB','BS','s','Bestätigungsobjekt per Anfrage-ID abfragen',{ph:3,g:'opt',sc:'ler-loading',k:'http',sp:'gap',path:'/polling/poll',pl:()=>({resourceType:'Parameters',meta:prof('KK_ELB_PollingRequest'),parameter:[{_d:1,name:'requestId',valueIdentifier:id('urn:ietf:rfc:3986','urn:uuid:'+REQ)}]}),note:'KK_ELB_PollingRequest kennt per geschlossenem Slicing nur requestingSystem, performingOrganization, patient und payor. Für den Abruf genau einer Anfrage braucht es einen Parameter für die Anfrage-ID.',gap:'Polling: Abruf per Anfrage-ID ergänzen (bisher requestingSystem, performingOrganization, patient, payor).'}),
+st(30,'BS','LB','r','Bestätigungsobjekt',{ph:3,g:'opt',sc:'ler-loading',k:'http',sp:'ta',status:'200 OK',pl:respP,note:'Nach dem Pollingabruf quittiert das Backend laut TA den Empfang über /polling/confirm (KK_ELB_ConfirmationOfResponse mit confirmationBundleUuid). Dieser Schritt steht noch nicht im APPFLOW.',gap:'Empfangsquittung /polling/confirm nach dem Abruf in den APPFLOW aufnehmen.'}),
+st(31,'LB','LA','r','Status rückmelden',{ph:3,sc:'ler-loading',k:'intern',sp:'le',status:'200 OK',pl:()=>({requestId:REQ,status:S.dec==='ok'?'bestaetigt':'abgelehnt'})}),
+st(32,'LA','V','s','Bestätigungsstatus anzeigen, Follow-up-Flow starten',{ph:3,sc:'ler-result',k:'ui',sp:'ui',note:'Ergebnis in der App des Leistungserbringers, danach geht es mit der nächsten Fahrt weiter.'})
+];
+const FL={
+ A:{steps:A,start:5,back:24,clock:'9:41',phs:['Organisation','Teilnahmestatus abfragen','Zustimmung in Krankenkassen-FdV einholen','Rückwechsel zu Leistungserbringer-FdV'],
+  vars:[['happy','Zustimmung fehlt (Happy Path)'],['consent','Zustimmung liegt vor'],['registry','Registry-Prüfung schlägt fehl'],['noapp','Kassen-App nicht installiert']],
+  opts:[['login','Anmeldung in der Kassen-App']],
+  path:(v,o)=>{const pre=[1,2,3,4,5,6];if(v==='registry')return[...pre,7];const p=[...pre,8,9];if(v==='consent')return[...p,10,11];const q=[...p,12,13,14];if(v==='noapp')return q;return[...q,15,...(o.login?[16]:[]),17,18,19,20,21,22,23,24,25,26,27,28,29]}},
+ B:{steps:B,start:1,back:27,clock:'10:28',phs:['Bestätigungsanfrage anlegen','Versicherten informieren','Bestätigung in der Krankenkassen-FdV','Status zurückmelden'],
+  vars:[['happy','Bestätigung (Happy Path)'],['registry','Registry-Prüfung schlägt fehl'],['nopart','Keine Teilnahme'],['unknown','Anfrage unbekannt']],
+  opts:[['login','Anmeldung in der Kassen-App'],['late','Webhook kommt verspätet']],
+  path:(v,o)=>{const pre=[1,2,3,4];if(v==='registry')return[...pre,5];if(v==='nopart')return[...pre,6,7];const p=[...pre,6,8,9,10,11,12,13,...(o.login?[14]:[]),15,16];if(v==='unknown')return[...p,17,18];return[...p,19,20,21,22,23,24,25,26,27,28,...(o.late?[29,30]:[]),31,32]}}
+};
+const OPS=[
+ [1,'Race Condition zwischen Webhook und Statusabfrage',[21,22,26,27,28],'Callback-Deep-Link (21) und Webhook (22) laufen parallel. Fragt die App den Status ab (26), bevor der Webhook verarbeitet ist, zeigt Schritt 28 einen veralteten Stand.'],
+ [2,'Ablehnung der Zustimmung nicht modelliert',[17,28,29],'Abgebildet ist nur die Bestätigung der Teilnahme; Übermittlung einer Ablehnung und Reaktion der App sind offen.'],
+ [3,'Kein Eintrag im Bestätigungssystem gefunden',[20,21,22,24],'Etwa bei abgelaufenem Pseudonym oder anderer angemeldeter Person in der Kassen-App; dann fehlt der Callback-Deep-Link für den Rücksprung.'],
+ [4,'Keine Registry-Prüfung der Webhook-URL',[6],'Geprüft wird nur der Callback-Deep-Link; Teilnahmestatus und eKVNR könnten an beliebige Endpunkte gehen.'],
+ [5,'Fehlermeldung erreicht die Leistungserbringer-FdV nicht',[7],'Bei negativer Registry-Prüfung endet der Ablauf im Backend; die Anzeige in der App ist offen.'],
+ [6,'Consent-Deep-Link der zuständigen Krankenkasse',[9,14],'Rückgabe zusammen mit dem Teilnahmestatus (9) oder Ableitung aus den Genehmigungsinformationen.'],
+ [7,'Krankenkassen-FdV nicht installiert',[14],'Das Betriebssystem öffnet den Link im Browser; Webseite der Kasse oder Installationshinweis ist festzulegen.'],
+ [8,'Übermittlung der eKVNR im Webhook',[22],'Zur Zuordnung genügt das Pseudonym (seit Schritt 4 im Backend hinterlegt) – im Sinne der Datenminimierung.']
+];
+
+const APIS=[['POST','/app/register-insurant','A',[18,21],'Teilnahme anlegen. kvnr aus dem JWT, Antwort ParticipantDto {kvnr}. Pseudonym und Callback-Deep-Link fehlen noch.'],['GET','/app/confirmation/{uuid}','B',[15,19],'Anfrage laden, Antwort ConfirmationRequestDto. Feld für den Callback-Deep-Link fehlt noch.'],['POST','/app/confirmation/{uuid}/{confirmed}','B',[22,24],'Entscheidung als Boolean im Pfad, Antwort 200 ohne Body.'],['GET','/app/pending-confirmations','',[],'Alle offenen Anfragen der Versicherten – Einstieg, wenn die Kassen-App ohne Deep Link geöffnet wird.'],['GET','/app/insurant-status','',[],'Teilnahmestatus der Versicherten (ParticipantDto); im APPFLOW bisher nicht genutzt.'],['DELETE','/app/unregister-insurant','',[],'Teilnahme beenden; im APPFLOW bisher nicht modelliert.'],['GET','/jwks','',[],'JWK-Set des Servers; im APPFLOW nicht abgebildet.']];
+/* ---------- Gerät ---------- */
+const TRIP=`<div class="card trip"><div class="tt">Hinfahrt zur Dialyse</div><div class="tm">Mi, 13.05.2026 · 07:30–08:15</div><div class="route"><span>Beispielstraße 12, Leipzig</span><span>Liebigstraße 20, Leipzig</span></div></div>`;
+const LINK='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>';
+const sb=back=>`<div class="sb"><span>${back?'◀ '+back:FL[S.flow].clock}</span><span class="isl"></span><span class="sbr"><i class="sig"><b></b><b></b><b></b><b></b></i>5G<i class="bat"></i></span></div>`;
+const backOf=(s,app)=>app==='kk'?'Müller KTW':app==='ler'&&s.n>=FL[S.flow].back?'Musterkasse':'';
+const ler=(b,s)=>`<div class="app ler"><div class="top">${sb(backOf(s,'ler'))}<div class="ah"><span class="lg">M</span>Müller KTW</div></div><div class="ab">${b}</div></div>`;
+const kk=(b,s)=>`<div class="app kk"><div class="top">${sb(backOf(s,'kk'))}<div class="ah"><span class="lg">MK</span>Musterkasse</div></div><div class="ab">${b}</div></div>`;
+const splash=(c,l,t)=>`<div class="app ${c}"><div class="top">${sb()}</div><div class="spl"><span class="big">${l}</span>${t}<span class="spin"></span></div></div>`;
+const lock=x=>`<div class="wall">${sb()}<div class="lt">${FL[S.flow].clock}</div><div class="ldt">Mittwoch, 13. Mai</div>${x}</div>`;
+const load=(c,t)=>`<div class="ld" style="--ac:${c}"><span class="spin"></span><b>${t}</b></div>`;
+const HOME=[['Kalender','#ff5a4e','13'],['Fotos','#f5a400','F'],['Karten','#34a853','K'],['Wetter','#3b8cff','W'],['Müller KTW','#0a5cff','M',1],['Musterkasse','#00a05a','MK'],['Notizen','#e8b400','N'],['Uhr','#2a2d33','U']];
+const TRIPS=`<div class="lst"><div class="card"><span class="d">13<br>Mai</span><b>Hinfahrt Dialyse · 07:30</b><small>Beispielstraße 12 → Liebigstraße 20</small></div><div class="card"><span class="d">13<br>Mai</span><b>Rückfahrt · 12:15</b><small>Liebigstraße 20 → Beispielstraße 12</small></div><div class="card"><span class="d">15<br>Mai</span><b>Hinfahrt Dialyse · 07:30</b><small>Beispielstraße 12 → Liebigstraße 20</small></div></div>`;
+const SC={
+ home:{app:'os',h:()=>`<div class="wall">${sb()}<div class="ntc"><div class="nh"><span class="mi kk">MK</span>Musterkasse<em>jetzt</em></div><b>Neu: Fahrten digital bestätigen</b><p>Krankenfahrten bestätigen Sie künftig in der Musterkasse-App. Los geht es in der App Ihres Fahrdienstes.</p></div><div class="hg">${HOME.map(([l,c,t,a])=>`<div><span class="ic" style="background:${c};--ac:${c}"${a?' data-act="go" role="button" tabindex="0" aria-label="Müller KTW öffnen"':''}>${t}</span>${l}</div>`).join('')}</div></div>`},
+ 'ler-splash':{app:'ler',wait:1,h:()=>splash('ler','M','Müller KTW')},
+ 'ler-check':{app:'ler',wait:1,h:s=>{const n=s.n,it=[['Profil laden',3,4],['Sichere Kennung erzeugen',4,5],['Teilnahme bei der Musterkasse prüfen',5,10]];
+   return ler(`<h2>Guten Morgen, Erika</h2><div class="card"><b>Fahrten digital bestätigen</b><ul class="chk">${it.map(([t,a,b])=>`<li class="${n>=b?'ok':n>=a?'run':''}"><i></i>${t}</li>`).join('')}</ul>${n>=12?'<div class="res"><b>Noch ein Schritt</b>Zustimmung in der Musterkasse-App erteilen</div>':''}</div><p class="lbl">Ihre nächsten Fahrten</p><div class="sk"></div><div class="sk"></div>`,s)}},
+ op:{app:'ler',h:s=>ler(`<div class="opb"><b>Offener Punkt 5</b><p>Die Registry-Prüfung ist fehlgeschlagen, der Ablauf endet im Backend. Was die App an dieser Stelle zeigt, beschreibt die APPFLOW.md noch nicht.</p></div>`,s)},
+ 'ler-ready':{app:'ler',h:s=>ler(`<div class="fin"><i class="okb"></i><h2>eLB ist aktiv</h2><p>Ihre Zustimmung liegt der Musterkasse bereits vor. Fahrten bestätigen Sie direkt in der Musterkasse-App.</p></div><button class="pb" data-act="go">Weiter zu meinen Fahrten</button>`,s)},
+ 'ler-trips':{app:'ler',h:s=>ler(`<h2>Meine Fahrten</h2><span class="tag">eLB aktiv</span>${TRIPS}`,s)},
+ 'ler-hint':{app:'ler',h:s=>ler(`<div class="pair"><span class="big" style="background:#0a5cff">M</span><span class="arw">→</span><span class="big" style="background:#00a05a">MK</span></div><h2>Noch ein Schritt in der App Ihrer Krankenkasse</h2><p>Damit Sie Fahrten digital bestätigen können, stimmen Sie der elektronischen Leistungsbestätigung in der Musterkasse-App zu. Danach geht es automatisch hierher zurück.</p><button class="pb" data-act="go">Weiter zur Musterkasse</button>`,s)},
+ 'kk-splash':{app:'kk',wait:1,h:()=>splash('kk','MK','Musterkasse')},
+ 'kk-missing':{app:'web',h:()=>`<div class="app web"><div class="top">${sb()}<div class="url">app.musterkasse.example</div></div><div class="ab"><div class="opb"><b>Offener Punkt 7</b><p>Die Kassen-App ist nicht installiert, deshalb öffnet das Betriebssystem den Link im Browser. Ob hier eine Webseite der Kasse oder ein Installationshinweis erscheint, ist noch festzulegen.</p></div></div></div>`},
+ 'kk-entry':{app:'kk',h:(s,nx)=>nx===16?LOGIN(s):CONSENT(s)},
+ 'kk-consent':{app:'kk',h:s=>CONSENT(s)},
+ 'kk-saving':{app:'kk',wait:1,h:s=>kk(load('#00a05a','Teilnahme wird gespeichert'),s)},
+ 'kk-done-a':{app:'kk',wait:1,h:s=>kk(`<div class="fin"><i class="okb"></i><h2>Teilnahme bestätigt</h2><p>Sie werden zu Müller KTW zurückgeleitet.</p><span class="spin s" style="--ac:#00a05a"></span></div>`,s)},
+ 'ler-loading':{app:'ler',wait:1,h:s=>ler(S.flow==='A'?load('#0a5cff','Status wird aktualisiert'):`${TRIP}${load('#0a5cff','Status wird abgefragt')}`,s)},
+ 'ler-onboarded':{app:'ler',h:s=>ler(`<div class="fin"><i class="okb"></i><h2>Alles eingerichtet</h2><p>Ab jetzt bestätigen Sie Ihre Fahrten digital in der Musterkasse-App.</p></div><button class="pb" data-act="go">Weiter zu meinen Fahrten</button>`,s)},
+ lock:{app:'lock',h:()=>lock('')},
+ 'lock-push':{app:'lock',h:()=>lock(`<div class="ntc" data-act="go" role="button" tabindex="0" style="--ac:#0a5cff"><div class="nh"><span class="mi ler">M</span>Müller KTW<em>jetzt</em></div><b>Fahrt vom 13.05., 07:30 bestätigen</b><p>Bitte bestätigen Sie Ihre Hinfahrt in der App Ihrer Krankenkasse.</p></div>`)},
+ 'ler-prompt':{app:'ler',h:s=>ler(`<h2>Fahrt bestätigen</h2>${TRIP}<p>Bitte bestätigen Sie diese Fahrt in der App Ihrer Krankenkasse.</p>${s.n===12?'<button class="pb busy"><span class="spin s" style="--ac:#fff"></span>Musterkasse wird geöffnet</button>':'<button class="pb" data-act="go">Jetzt zur Musterkasse wechseln</button>'}`,s)},
+ 'kk-entry-b':{app:'kk',wait:1,h:(s,nx)=>nx===14?LOGIN(s):kk(load('#00a05a','Leistung wird geladen'),s)},
+ 'kk-loading':{app:'kk',wait:1,h:s=>kk(load('#00a05a',s.n===19?'Leistung geladen':'Leistung wird geladen'),s)},
+ 'kk-error':{app:'kk',h:s=>kk(`<div class="fin"><i class="okb no"></i><h2>Diese Anfrage ist hier nicht verfügbar</h2><p>Bitte wenden Sie sich an Ihren Fahrdienst.</p></div>`,s)},
+ 'kk-review':{app:'kk',h:s=>kk(`<h2>Leistung bestätigen</h2><div class="card"><div class="who">Krankentransport Müller GmbH</div><dl class="rv"><dt>Leistung</dt><dd>Krankentransport · 50101</dd><dt>Datum</dt><dd>Mi, 13.05.2026</dd><dt>Zeit</dt><dd>07:30–08:15</dd><dt>Von</dt><dd>Beispielstraße 12, 04109 Leipzig</dd><dt>Nach</dt><dd>Liebigstraße 20, 04103 Leipzig</dd></dl></div><button class="pb" data-act="confirm">Bestätigen</button><button class="pb o" data-act="reject" style="--ac:#e6261f">Ablehnen</button>`,s)},
+ 'kk-sending':{app:'kk',wait:1,h:s=>kk(load('#00a05a','Wird übermittelt'),s)},
+ 'kk-done-b':{app:'kk',wait:1,h:s=>kk(`<div class="fin"><i class="okb"></i><h2>${S.dec==='ok'?'Danke, Fahrt bestätigt':'Ablehnung übermittelt'}</h2><p>Sie werden zu Müller KTW zurückgeleitet.</p><span class="spin s" style="--ac:#00a05a"></span></div>`,s)},
+ 'ler-result':{app:'ler',h:s=>{const ok=S.dec==='ok';return ler(`<div class="fin"><i class="okb${ok?'':' no'}"></i><h2>${ok?'Fahrt bestätigt':'Fahrt abgelehnt'}</h2><p>${ok?'Die Musterkasse hat Ihre Bestätigung übermittelt.':'Ihre Ablehnung ist bei uns angekommen.'}</p></div><p class="lbl">Als Nächstes</p>${ok?'<div class="lst"><div class="card"><span class="d">13<br>Mai</span><b>Rückfahrt · 12:15</b><small>Liebigstraße 20 → Beispielstraße 12</small></div></div>':'<div class="card"><b>Fahrt klären</b><p>Unser Team meldet sich zur Abstimmung.</p></div>'}`,s)}}
+};
+const LOGIN=s=>kk(`<div class="fin"><span class="big" style="background:#00a05a;color:#fff">MK</span><h2>Willkommen zurück</h2><p>Melden Sie sich an, um fortzufahren.</p></div><button class="pb" data-act="go">Mit Face ID anmelden</button>`,s);
+const CONSENT=s=>kk(`<h2>Elektronische Leistungsbestätigung</h2><p>Bestätigen Sie Leistungen wie Krankenfahrten künftig direkt hier in der App.</p><ul class="pts"><li>Sie sehen jede Leistung vor der Bestätigung.</li><li>Ihre Entscheidung geht direkt an den Leistungserbringer.</li><li>Eingerichtet über: Müller KTW</li></ul><span class="cbx"><i></i>Nutzungsbedingungen gelesen</span><button class="pb" data-act="go">Teilnahme bestätigen</button><button class="tb" data-op="2">Nicht jetzt</button>`,s);
+
+/* ---------- Logik ---------- */
+const steps=()=>FL[S.flow].steps;
+const stepOf=n=>steps().find(s=>s.n===n);
+const path=()=>FL[S.flow].path(S.v[S.flow],S.o[S.flow]);
+const cur=()=>stepOf(S.path[S.ix[S.flow]]);
+const nextN=()=>S.path[S.ix[S.flow]+1];
+const scrKey=s=>S.flow==='A'&&s.n===14&&S.v.A==='noapp'?'kk-missing':s.sc;
+function go(i){const p=S.path;i=Math.max(0,Math.min(p.length-1,i));S.dir=i>=S.ix[S.flow]?1:-1;S.ix[S.flow]=i;render()}
+function jumpTo(n){const F=FL[S.flow];let p=path();if(!p.includes(n)){const on=Object.fromEntries(F.opts.map(o=>[o[0],true]));let hit=null;for(const [v] of F.vars){for(const o of [S.o[S.flow],{...S.o[S.flow],...on}]){if(F.path(v,o).includes(n)){hit=[v,o];break}}if(hit)break}if(!hit)return;S.v[S.flow]=hit[0];S.o[S.flow]={...hit[1]};S.path=p=path()}S.dir=1;S.ix[S.flow]=p.indexOf(n);render()}
+function reflow(){const n=cur().n,i0=S.ix[S.flow];S.path=path();const i=S.path.indexOf(n);S.ix[S.flow]=i>=0?i:Math.min(i0,S.path.length-1);render()}
+
+/* ---------- Ausgabe: FHIR JSON/XML ---------- */
+function jsonL(v){const out=[];const w=(v,ind,key,last,d)=>{const p='  '.repeat(ind),k=key!=null?JSON.stringify(key)+': ':'',c=last?'':',',dd=d||!!(v&&v._d);
+ if(Array.isArray(v)){out.push({t:p+k+'[',d:dd});v.forEach((x,i)=>w(x,ind+1,null,i===v.length-1,dd));out.push({t:p+']'+c,d:dd})}
+ else if(v&&typeof v==='object'){const ks=Object.keys(v).filter(x=>x[0]!=='_');out.push({t:p+k+'{',d:dd});ks.forEach((x,i)=>w(v[x],ind+1,x,i===ks.length-1,dd||!!(v._dk&&v._dk.includes(x))));out.push({t:p+'}'+c,d:dd})}
+ else out.push({t:p+k+JSON.stringify(v)+c,d:dd})};w(v,0,null,true,false);return out}
+function xmlL(r){const out=[{t:'<?xml version="1.0" encoding="UTF-8"?>',d:false}],I=n=>'  '.repeat(n),xa=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+ const res=(r,ind,d,root)=>{const dd=d||!!r._d;out.push({t:I(ind)+'<'+r.resourceType+(root?' xmlns="http://hl7.org/fhir"':'')+'>',d:dd});for(const k of Object.keys(r)){if(k==='resourceType'||k[0]==='_')continue;[].concat(r[k]).forEach(x=>el(k,x,ind+1,dd))}out.push({t:I(ind)+'</'+r.resourceType+'>',d:dd})};
+ const el=(k,v,ind,d)=>{if(v===null||typeof v!=='object'){out.push({t:I(ind)+'<'+k+' value="'+xa(v)+'"/>',d});return}const dd=d||!!v._d;
+  if(v.resourceType){out.push({t:I(ind)+'<'+k+'>',d:dd});res(v,ind+1,dd);out.push({t:I(ind)+'</'+k+'>',d:dd});return}
+  const ext=k==='extension'&&v.url!=null;out.push({t:I(ind)+'<'+k+(ext?' url="'+xa(v.url)+'"':'')+'>',d:dd});
+  for(const kk of Object.keys(v)){if(kk[0]==='_'||(ext&&kk==='url'))continue;[].concat(v[kk]).forEach(x=>el(kk,x,ind+1,dd))}
+  out.push({t:I(ind)+'</'+k+'>',d:dd})};
+ res(r,0,false,true);return out}
+const hl=(t,x)=>{const e=esc(t);if(x)return e.replace(/(\w+)="([^"]*)"/g,'<span class="a">$1</span>="<span class="v">$2</span>"').replace(/(&lt;\/?)([\w:]+)/g,'$1<span class="k">$2</span>');return e.replace(/^(\s*)("[^"]*")(:)/,'$1<span class="k">$2</span>$3').replace(/: (".*")(,?)$/,': <span class="v">$1</span>$2')};
+let COPY='';
+function pay(o,label){const fx=!!o.resourceType,xml=fx&&S.fmt==='xml',L=xml?xmlL(o):jsonL(o);COPY=L.map(l=>l.t).join('\n');const pf=o.meta&&o.meta.profile?o.meta.profile[0].split('/').pop():null,hd=L.some(l=>l.d);
+ return `<div class="blk"><div class="pbar"><h3>${label}</h3>${fx?`<span class="seg"><button data-fmt="json" aria-pressed="${!xml}">JSON</button><button data-fmt="xml" aria-pressed="${xml}">XML</button></span>`:''}<button class="cp" id="cp">Kopieren</button></div>${fx?`<p class="prof">${pf?'Profil <code>'+pf+'</code>':o.resourceType==='OperationOutcome'?'OperationOutcome – Vorschlag, kein eLB-Profil':'Parameters – Entwurf, noch ohne Profil'}</p>`:''}<pre class="code">${L.map(l=>`<span class="l${l.d?' d':''}">${hl(l.t,xml)}</span>`).join('')}</pre>${hd?'<p class="leg"><i></i>Gelb: in Profil, OpenAPI bzw. Kassen-API noch nicht vorgesehen</p>':''}</div>`}
+const kvT=rows=>`<table class="kv">${rows.map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join('')}</table>`;
+function raw(s,snd,rcv){const rq=s.a!=='r',B='elb-'+(4096+s.n*37).toString(16),u=s.url?new URL(s.url):null;
+ const head=rq?(u?`POST ${u.pathname} HTTP/1.1\nHost: ${u.host}`:`POST /api${s.path} HTTP/1.1\nHost: ${HOST}`):`HTTP/1.1 ${s.status||'200 OK'}`;
+ const part=(n,v,ct)=>`--${B}\nContent-Disposition: form-data; name="${n}"${ct?'\nContent-Type: '+ct:''}\n\n${v}`;
+ return `${head}\nContent-Type: multipart/form-data; boundary=${B}\n\n${part('iksender',snd)}\n${part('ikempfaenger',rcv)}\n${part('verfahren','ELB')}\n${part('nutzdaten','‹SECON-verschlüsselte Nutzdaten›','application/octet-stream')}\n--${B}--`}
+const BD={ta:['ta','TA eLB · Profil vorhanden'],gap:['gap','Profil braucht Erweiterung'],neu:['gap','neu im APPFLOW, noch nicht spezifiziert'],le:['le','herstellerintern · Beispiel'],kk:['kk','kassenintern · Beispiel'],api:['kk','Kassen-API · api-docs.json'],apigap:['gap','Kassen-API braucht Erweiterung'],lokal:['','lokale Verarbeitung'],ui:['','Bedienung'],os:['','Betriebssystem']};
+function tech(s){const k=s.k,note=val(s.note);let h='';
+ if(k==='ui'||k==='os')return `<div class="blk"><h3>${k==='os'?'Betriebssystem':'Bedienung'}</h3><p class="nt">${esc(note||'')}</p></div>`;
+ if(note)h+=`<p class="nt">${esc(note)}</p>`;
+ if(k==='local'){h+=`<div class="blk"><h3>Zustand · ${P[s.f].n}</h3>${kvT(val(s.kv))}</div>`;if(s.pl)h+=pay(val(s.pl),'Erzeugtes Objekt')}
+ if(k==='intern'){const api=/^api/.test(val(s.sp));h+=`<div class="blk"><h3>${s.a==='r'?'Antwort':'Aufruf'}${api?' · Kassen-API (api-docs.json)':''}</h3><pre class="raw">${esc((s.a==='r'?'HTTP/1.1 '+(s.status||'200 OK')+(s.pl&&!s._d?'\nContent-Type: application/json':''):s.m+' '+val(s.url))+(s.hdr?'\n'+s.hdr.join('\n'):''))}</pre></div>`;if(s.pl)h+=pay(val(s.pl),s.plLabel||(s.a==='r'?'Antwort-Body (JSON)':'Request-Body (JSON)'))}
+ if(k==='push')h+=pay(val(s.pl),'Push-Payload (APNs)');
+ if(k==='http'){const rq=s.a!=='r',snd=s.f==='BS'?IK_KK:IK_LE,rcv=s.f==='BS'?IK_LE:IK_KK,url=s.url||BASE+s.path;
+  const rows=rq?[['Aufruf','POST '+url],['Verbindung','mTLS · Client-Zertifikat zum IK '+snd+' (ITSG Trust Center)']]:[['Antwort','HTTP/1.1 '+(s.status||'200 OK')]];
+  rows.push(['Content-Type','multipart/form-data'],['iksender',snd],['ikempfaenger',rcv],['verfahren','ELB'],['nutzdaten','application/octet-stream, verschlüsselt nach Anlage 16 GGT (SECON)']);
+  h+=`<div class="blk"><h3>Transport${s.url&&rq?' · Webhook':''}</h3>${kvT(rows)}<details><summary>Rohformat anzeigen</summary><pre class="raw">${esc(raw(s,snd,rcv))}</pre></details></div>`;
+  const p=val(s.pl);h+=p?pay(p,'nutzdaten, entschlüsselt'):`<div class="blk"><h3>nutzdaten, entschlüsselt</h3><p class="nt">${esc(s.plNote||'')}</p></div>`}
+ if(k==='deeplink'){const u=new URL(s.url);h+=`<div class="blk"><h3>Deep Link</h3><pre class="raw">${esc(s.url)}</pre>${kvT([['Typ','Universal Link (iOS) / App Link (Android)'],['Öffnet',s.t==='KA'?'Musterkasse · Krankenkassen-FdV':'Müller KTW · Leistungserbringer-FdV'],['Host',u.host],['Pfad',u.pathname],...[...u.searchParams].map(([a,b])=>['Parameter '+a,b]),['Domain-Freigabe','/.well-known/apple-app-site-association\n/.well-known/assetlinks.json']])}</div>`}
+ return h}
+
+/* ---------- Rendern ---------- */
+const pc=l=>`<span class="pc c-${l}"><span>${P[l].n}</span></span>`;
+function insp(){const s=cur(),sp=val(s.sp),b=BD[sp];
+ const ops=S.flow==='A'?OPS.filter(o=>o[2].includes(s.n)):[];
+ $('#insp').innerHTML=`<div class="ih"><div class="inum">${s.n}</div><div><p class="iph">Phase ${s.ph+1} · ${FL[S.flow].phs[s.ph]}</p><p class="idir">${pc(s.f)}${s.f===s.t?'':`<span class="ia">${s.a==='r'?'⇠':'→'}</span>${pc(s.t)}`}</p></div></div>
+ <p class="itx">${esc(s.x)}</p><div>${b?`<span class="b ${b[0]}">${b[1]}</span>`:''}${s.g==='err'?'<span class="b err">Fehlerpfad</span>':''}${s.g==='opt'?'<span class="b">optional</span>':''}${s.g==='par'||s.g==='and'?'<span class="b le">parallel</span>':''}${s.a==='a'?'<span class="b">asynchron</span>':''}${s.a==='r'?'<span class="b">Antwort</span>':''}</div>
+ ${tech(s)}${ops.length?`<div class="blk"><h3>Offene Punkte zu diesem Schritt</h3><ul class="ops">${ops.map(o=>`<li><span class="opn">${o[0]}</span><b>${esc(o[1])}</b><span>${esc(o[3])}</span></li>`).join('')}</ul></div>`:''}`}
+function phone(){const s=cur(),key=scrKey(s),d=SC[key],nx=nextN(),an=S.last&&S.last!==d.app?(S.dir>0?'in':'back'):'';S.last=d.app;
+ $('#scr').innerHTML=`<div class="sc ${an}">${d.h(s,nx)}${s.k==='deeplink'?`<div class="lnk">${LINK}<span>${esc(s.url.replace('https://',''))}</span></div>`:''}<div class="toast" id="toast"></div></div>`;
+ if(nx==null)$('#scr').querySelectorAll('[data-act]').forEach(e=>e.removeAttribute('data-act'));
+ const APN={os:'Startbildschirm',lock:'Sperrbildschirm',ler:'Müller KTW (Leistungserbringer-FdV)',kk:'Musterkasse (Krankenkassen-FdV)',web:'Browser'};
+ const fg=['V','LA','KA'],bg=!fg.includes(s.f)&&!fg.includes(s.t),ns=nx!=null?stepOf(nx):null;
+ let c=s.f==='V'&&s.t!=='V'?'Aktion der Versicherten':bg?(s.f===s.t?'im Hintergrund: '+P[s.f].n:'im Hintergrund: '+P[s.f].s+' → '+P[s.t].s):d.wait?'Versicherte:r wartet':'';
+ if(S.play&&ns&&ns.f==='V')c='Sie sind dran: im Gerät tippen';
+ if(nx==null)c='Ende dieses Pfads';
+ $('#cap').innerHTML=`<b>${APN[d.app]}</b>${c?'<br>'+c:''}`}
+function count(arr){let t=0,w=0,sw=0;arr.forEach(n=>{const s=stepOf(n);if(s.f==='V'&&s.t!=='V')t++;if(s.k==='deeplink')sw++;const be=['LB','BS'];if(SC[scrKey(s)].wait&&s.f!==s.t&&(be.includes(s.f)||be.includes(s.t)))w++});return[t,sw,w]}
+function meta(){const i=S.ix[S.flow],a=count(S.path.slice(0,i+1)),b=count(S.path);
+ $('#met').innerHTML=[['Taps',0],['App-Wechsel',1],['Server-Aufrufe im Wartebildschirm',2]].map(([l,k])=>`<div><b>${a[k]}<small> / ${b[k]}</small></b>${l}</div>`).join('');
+ $('#pbar').style.width=((i+1)/S.path.length*100)+'%';$('#b-pv').disabled=i===0;$('#b-nx').disabled=i===S.path.length-1;$('#b-pl').textContent=S.play?'Pause':'Abspielen'}
+const X=i=>(i*20+10)+'%';
+function lanes(s){const a=LANES.indexOf(s.f),b=LANES.indexOf(s.t);let h=LANES.map((l,i)=>`<i class="ln c-${l}" style="left:${X(i)}"></i>`).join('');
+ if(a===b)h+=`<i class="self c-${s.f}" style="left:${X(a)}"></i>`;else{const l=Math.min(a,b),r=Math.max(a,b);h+=`<i class="ar ${s.a} ${b>a?'rt':'lt'} c-${s.f}" style="left:${X(l)};right:${100-(r*20+10)}%"></i><i class="dot c-${s.f}" style="left:${X(a)}"></i>`}return h}
+const GL={err:'break',ok:'break',opt:'opt',par:'par',and:'and'};
+function tl(){const F=FL[S.flow],c=S.path[S.ix[S.flow]];let h=`<div class="tlh"><span></span><span class="tla">${LANES.map((l,i)=>`<b class="c-${l}" style="left:${X(i)}">${P[l].s}</b>`).join('')}</span><span class="ttl">Sequenz ${F===FL.A?'Anmeldung':'Bestätigung'}</span></div>`,ph=-1;
+ for(const s of F.steps){if(s.ph!==ph){ph=s.ph;h+=`<div class="tph">Phase ${ph+1} · ${F.phs[ph]}</div>`}
+  const k=S.path.indexOf(s.n),cls=s.n===c?'cur':k<0?'off':k<S.ix[S.flow]?'done':'next';
+  h+=`<button class="tr ${cls}${s.g?' g-'+s.g:''}" data-step="${s.n}"${k<0?' title="Anderer Pfad – Klick wechselt die Variante"':''}><span class="tn">${s.n}</span><span class="tla">${lanes(s)}</span><span class="tx">${s.g?`<em>${GL[s.g]}</em>`:''}${esc(s.x)}${s.gap?'<i class="gp" title="Spezifikation braucht Ergänzung"></i>':''}</span></button>`}
+ const box=$('#tlb'),top=box.scrollTop;box.innerHTML=h;box.scrollTop=top;const r=box.querySelector('.tr.cur');
+ if(r&&(r.offsetTop<top+80||r.offsetTop+r.offsetHeight>top+box.clientHeight))box.scrollTop=r.offsetTop-box.clientHeight/2}
+function head(){const F=FL[S.flow];['A','B'].forEach(f=>$('#tab-'+f).setAttribute('aria-selected',S.flow===f));
+ $('#vg').innerHTML='<span class="gl">Variante</span>'+F.vars.map(([k,l])=>`<button class="chip" data-var="${k}" aria-pressed="${S.v[S.flow]===k}">${l}</button>`).join('');
+ $('#og').innerHTML='<span class="gl">Optionen</span>'+F.opts.map(([k,l])=>`<label class="ck"><input type="checkbox" id="opt-${k}" data-opt="${k}"${S.o[S.flow][k]?' checked':''}>${l}</label>`).join('');
+ const cp=cur().ph;$('#ph').innerHTML=F.phs.map((p,i)=>`<button class="st ${i<cp?'done':i===cp?'cur':''}" data-ph="${i}"><i></i><b>Phase ${i+1}</b><span>${p}</span></button>`).join('')}
+function gaps(){const m=new Map();steps().filter(s=>s.gap).forEach(s=>{if(!m.has(s.gap))m.set(s.gap,[]);m.get(s.gap).push(s.n)});
+ $('#gl').innerHTML=[...m].map(([g,ns])=>`<li><span class="chips">${ns.map(n=>`<button class="sn am" data-step="${n}" aria-label="Schritt ${n}">${n}</button>`).join('')}</span><span>${esc(g)}</span></li>`).join('');
+ $('#al').innerHTML=APIS.map(([m,pa,f,ns,t])=>`<li><code>${m} ${esc(pa)}</code><span class="chips">${ns.length?(f==='A'?'Anmeldung':'Bestätigung')+ns.map(n=>`<button class="sn" data-fs="${f}:${n}" aria-label="${f==='A'?'Anmeldung':'Bestätigung'} Schritt ${n}">${n}</button>`).join(''):'kein Schritt'}</span><span>${esc(t)}</span></li>`).join('');
+ $('#ol').innerHTML=S.flow==='A'?OPS.map(o=>`<li><span class="chips">${o[2].map(n=>`<button class="sn" data-step="${n}" aria-label="Schritt ${n}">${n}</button>`).join('')}</span><span><b>${o[0]}. ${esc(o[1])}</b>${esc(o[3])}</span></li>`).join(''):'<li><span></span><span class="empty">Für den Bestätigungs-Workflow führt die APPFLOW.md keine offenen Punkte auf. Die Race Condition löst er bereits über den optionalen Abruf in den Schritten 29–30 – probieren Sie die Option „Webhook kommt verspätet“.</span></li>'}
+function render(){S.path=path();if(S.ix[S.flow]>=S.path.length)S.ix[S.flow]=S.path.length-1;head();tl();phone();insp();meta();gaps()}
+
+/* ---------- Ereignisse ---------- */
+let T=null;
+function tick(){clearTimeout(T);if(!S.play)return;const nx=nextN();if(nx==null){S.play=false;meta();phone();return}
+ if(stepOf(nx).f==='V'){phone();T=setTimeout(tick,500);return}go(S.ix[S.flow]+1);T=setTimeout(tick,1500)}
+const toStage=()=>{try{document.querySelector('.stage').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})}catch(e){}};
+function setFlow(f){if(S.flow===f)return;S.flow=f;S.last=null;S.play=false;try{location.hash=f==='A'?'anmeldung':'bestaetigung'}catch(e){}render()}
+document.addEventListener('click',e=>{const t=e.target.closest('button,[data-act],[data-op]');if(!t)return;const d=t.dataset;
+ if(d.flow)return setFlow(d.flow);
+ if(d.var){S.v[S.flow]=d.var;return reflow()}
+ if(d.fs){const [f,n]=d.fs.split(':');setFlow(f);jumpTo(+n);toStage();return}
+ if(d.step){jumpTo(+d.step);if(t.closest('.gaps'))toStage();return}
+ if(d.ph){const n=S.path.find(n=>stepOf(n).ph===+d.ph);if(n!=null)jumpTo(n);return}
+ if(d.fmt){S.fmt=d.fmt;return insp()}
+ if(d.act){if(d.act==='confirm')S.dec='ok';if(d.act==='reject')S.dec='no';go(S.ix[S.flow]+1);return}
+ if(d.op){const x=$('#toast');x.textContent='Eine Ablehnung der Zustimmung ist im APPFLOW noch nicht modelliert (Offener Punkt 2).';x.classList.add('on');setTimeout(()=>x.classList.remove('on'),2600);return}
+ if(t.id==='cp'){navigator.clipboard.writeText(COPY).then(()=>{t.textContent='Kopiert'},()=>{t.textContent='Kopieren nicht möglich'});setTimeout(()=>{t.textContent='Kopieren'},1600);return}
+ if(t.id==='b-nx')return go(S.ix[S.flow]+1);
+ if(t.id==='b-pv'){S.play=false;return go(S.ix[S.flow]-1)}
+ if(t.id==='b-rs'){S.play=false;S.dec='ok';S.last=null;S.ix[S.flow]=0;return render()}
+ if(t.id==='b-pl'){S.play=!S.play;if(S.play&&nextN()==null){S.dec='ok';S.ix[S.flow]=0;render()}meta();phone();if(S.play)T=setTimeout(tick,700);return}
+});
+document.addEventListener('change',e=>{const k=e.target.dataset.opt;if(k){S.o[S.flow][k]=e.target.checked;reflow()}});
+document.addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
+ if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-act]')){e.preventDefault();e.target.click();return}
+ if(e.key==='ArrowRight'){e.preventDefault();go(S.ix[S.flow]+1)}if(e.key==='ArrowLeft'){e.preventDefault();go(S.ix[S.flow]-1)}});
+window.addEventListener('hashchange',()=>{const f=location.hash==='#bestaetigung'?'B':location.hash==='#anmeldung'?'A':null;if(f)setFlow(f)});
+if(location.hash==='#bestaetigung')S.flow='B';
+for(const f of ['A','B']){const sv=S.flow;S.flow=f;S.ix[f]=Math.max(0,path().indexOf(FL[f].start));S.flow=sv}
+render();
+}
+</script>
+</body>
+</html>
